@@ -186,7 +186,10 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 | Family | Converts | Notes |
 |---|---|---|
-| Images | JPEG, PNG, HEIC, AVIF, TIFF, BMP, GIF ↔ each other; WebP in | Animation and pages kept where the target supports them |
+| Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; WebP, JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
+| Icons | Any image → ICO (16–256 px) and ICNS (16–1024 px), all standard sizes in one file | Padded to a square, centred |
+| Markdown | Markdown ↔ HTML, DOCX, DOC, RTF, ODT, TXT, and → PDF; PDF → Markdown | Headings, lists, tables, code, links, bold/italic. Apple's DOCX writer drops links |
+| Archives | ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, 7-Zip ↔ each other; RAR in | Unsafe paths, escaping links and zip bombs are blocked |
 | PDF | Images ↔ PDF pages; PDF → TXT, RTF, HTML, DOCX, DOC, ODT | PDF text extraction; scanned PDFs need OCR (M4) |
 | Documents | TXT, RTF, HTML, DOCX, DOC, ODT ↔ each other, and → PDF (A4) | Tables, lists and images laid out by the system text engine |
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
