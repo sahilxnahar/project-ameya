@@ -196,6 +196,8 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
 | Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
 
+The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
+
 Not yet: MP3 output, WebP output, EPUB, data formats, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
