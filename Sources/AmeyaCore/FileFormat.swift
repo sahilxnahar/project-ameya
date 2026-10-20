@@ -1,19 +1,44 @@
 import Foundation
 import ImageIO
-import UniformTypeIdentifiers
 
 /// A file format Ameya can read or write.
 public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
-    case jpeg, png, heic, avif, webp, tiff, bmp, gif, pdf
+    // Images
+    case jpeg, png, heic, avif, webp, tiff, bmp, gif
+    // Documents
+    case pdf, txt, rtf, html, docx, doc, odt
+    // Audio. `alac` is Apple Lossless in an .m4a file; it is only ever a target.
+    case mp3, m4a, alac, wav, aiff, caf, flac
+    // Video
+    case mp4, mov, m4v
+    // Subtitles
+    case srt, vtt
 
     public var id: String { rawValue }
 
     public enum Family: String, Codable, Sendable {
-        case image, document
+        case image, document, audio, video, subtitle
+
+        /// How long one job may run before it is stopped.
+        public var timeout: Duration {
+            switch self {
+            case .image: .seconds(120)
+            case .document: .seconds(180)
+            case .audio: .seconds(900)
+            case .video: .seconds(3600)
+            case .subtitle: .seconds(30)
+            }
+        }
     }
 
     public var family: Family {
-        self == .pdf ? .document : .image
+        switch self {
+        case .jpeg, .png, .heic, .avif, .webp, .tiff, .bmp, .gif: .image
+        case .pdf, .txt, .rtf, .html, .docx, .doc, .odt: .document
+        case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
+        case .mp4, .mov, .m4v: .video
+        case .srt, .vtt: .subtitle
+        }
     }
 
     public var displayName: String {
@@ -27,10 +52,28 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .bmp: "BMP"
         case .gif: "GIF"
         case .pdf: "PDF"
+        case .txt: "Plain Text"
+        case .rtf: "RTF"
+        case .html: "HTML"
+        case .docx: "Word (DOCX)"
+        case .doc: "Word 97 (DOC)"
+        case .odt: "OpenDocument"
+        case .mp3: "MP3"
+        case .m4a: "AAC (M4A)"
+        case .alac: "Apple Lossless"
+        case .wav: "WAV"
+        case .aiff: "AIFF"
+        case .caf: "CAF"
+        case .flac: "FLAC"
+        case .mp4: "MP4"
+        case .mov: "MOV"
+        case .m4v: "M4V"
+        case .srt: "SRT"
+        case .vtt: "WebVTT"
         }
     }
 
-    /// The Uniform Type Identifier ImageIO and the system use for this format.
+    /// The Uniform Type Identifier. ImageIO uses it for image formats.
     public var typeIdentifier: String {
         switch self {
         case .jpeg: "public.jpeg"
@@ -42,26 +85,57 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .bmp: "com.microsoft.bmp"
         case .gif: "com.compuserve.gif"
         case .pdf: "com.adobe.pdf"
+        case .txt: "public.plain-text"
+        case .rtf: "public.rtf"
+        case .html: "public.html"
+        case .docx: "org.openxmlformats.wordprocessingml.document"
+        case .doc: "com.microsoft.word.doc"
+        case .odt: "org.oasis-open.opendocument.text"
+        case .mp3: "public.mp3"
+        case .m4a, .alac: "com.apple.m4a-audio"
+        case .wav: "com.microsoft.waveform-audio"
+        case .aiff: "public.aiff-audio"
+        case .caf: "com.apple.coreaudio-format"
+        case .flac: "org.xiph.flac"
+        case .mp4: "public.mpeg-4"
+        case .mov: "com.apple.quicktime-movie"
+        case .m4v: "com.apple.m4v-video"
+        case .srt: "public.srt"
+        case .vtt: "org.w3.webvtt"
+        }
+    }
+
+    /// File name extensions recognised for this format, preferred one first.
+    public var extensions: [String] {
+        switch self {
+        case .jpeg: ["jpg", "jpeg", "jpe", "jfif"]
+        case .png: ["png", "apng"]
+        case .heic: ["heic", "heif", "hif"]
+        case .tiff: ["tiff", "tif"]
+        case .bmp: ["bmp", "dib"]
+        case .txt: ["txt", "text", "log"]
+        case .html: ["html", "htm", "xhtml"]
+        case .alac: [] // written as .m4a; never detected as a source
+        case .wav: ["wav", "wave"]
+        case .aiff: ["aiff", "aif", "aifc"]
+        case .mov: ["mov", "qt"]
+        default: [rawValue]
         }
     }
 
     public var preferredExtension: String {
-        switch self {
-        case .jpeg: "jpg"
-        case .tiff: "tiff"
-        default: rawValue
-        }
+        self == .alac ? "m4a" : extensions[0]
     }
 
-    /// Whether the format can store transparency.
+    // MARK: Image capabilities (also used for PDF pages)
+
     public var supportsAlpha: Bool {
         switch self {
-        case .jpeg, .bmp: false
-        default: true
+        case .png, .heic, .avif, .webp, .tiff, .gif, .pdf: true
+        default: false
         }
     }
 
-    /// Whether the format can store a timed animation.
     public var supportsAnimation: Bool {
         switch self {
         case .gif, .png, .webp: true
@@ -69,7 +143,6 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         }
     }
 
-    /// Whether the format can store several independent pages.
     public var supportsPages: Bool {
         switch self {
         case .tiff, .pdf: true
@@ -79,58 +152,29 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
 
     public var isLossy: Bool {
         switch self {
-        case .jpeg, .heic, .avif, .webp: true
+        case .jpeg, .heic, .avif, .webp, .mp3, .m4a: true
         default: false
         }
     }
 
-    /// Detects a format from the file's contents, falling back to its extension.
-    /// Contents win: a PNG named `photo.jpg` is a PNG.
-    public static func detect(at url: URL) -> FileFormat? {
-        if let handle = try? FileHandle(forReadingFrom: url) {
-            defer { try? handle.close() }
-            if let header = try? handle.read(upToCount: 64), let format = sniff(header) {
-                return format
-            }
+    /// Text documents that NSAttributedString can read and write.
+    public var isTextDocument: Bool {
+        switch self {
+        case .txt, .rtf, .html, .docx, .doc, .odt: true
+        default: false
         }
-        return fromExtension(url.pathExtension)
     }
 
-    /// Formats this Mac can write: whatever ImageIO can encode, plus PDF (drawn with Core Graphics).
+    /// Formats this Mac can write. Image formats are whatever ImageIO can encode;
+    /// the rest are provided by Ameya's own engines.
     public static func systemWritable() -> Set<FileFormat> {
         let encodable = Set(CGImageDestinationCopyTypeIdentifiers() as? [String] ?? [])
-        return Set(allCases.filter { $0 == .pdf || encodable.contains($0.typeIdentifier) })
-    }
-
-    public static func fromExtension(_ ext: String) -> FileFormat? {
-        guard let type = UTType(filenameExtension: ext.lowercased()) else { return nil }
-        return allCases.first { candidate in
-            guard let candidateType = UTType(candidate.typeIdentifier) else { return false }
-            return type.conforms(to: candidateType)
-        }
-    }
-
-    /// Identifies a format from the first bytes of a file.
-    public static func sniff(_ header: Data) -> FileFormat? {
-        let bytes = [UInt8](header.prefix(32))
-        func starts(_ prefix: [UInt8], at offset: Int = 0) -> Bool {
-            bytes.count >= offset + prefix.count && Array(bytes[offset..<offset + prefix.count]) == prefix
-        }
-        if starts([0xFF, 0xD8, 0xFF]) { return .jpeg }
-        if starts([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return .png }
-        if starts(Array("GIF8".utf8)) { return .gif }
-        if starts(Array("%PDF".utf8)) { return .pdf }
-        if starts([0x49, 0x49, 0x2A, 0x00]) || starts([0x4D, 0x4D, 0x00, 0x2A]) { return .tiff }
-        if starts(Array("RIFF".utf8)) && starts(Array("WEBP".utf8), at: 8) { return .webp }
-        if starts(Array("BM".utf8)) { return .bmp }
-        if starts(Array("ftyp".utf8), at: 4), bytes.count >= 12 {
-            let brand = String(decoding: bytes[8..<12], as: UTF8.self)
-            switch brand {
-            case "avif", "avis": return .avif
-            case "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1": return .heic
-            default: return nil
+        return Set(allCases.filter { format in
+            switch format {
+            case .mp3: false // needs the LGPL MP3 encoder (planned)
+            case _ where format.family == .image: encodable.contains(format.typeIdentifier)
+            default: true
             }
-        }
-        return nil
+        })
     }
 }

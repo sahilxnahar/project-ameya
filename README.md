@@ -3,8 +3,9 @@
 A native macOS file converter and toolbox. Drag files, pick an action, get a new file.
 Everything runs on your Mac: no account, no upload, no usage limits.
 
-> **Status: early development (M0 — Foundation).** Not ready for everyday use yet.
-> See the [roadmap](docs/ROADMAP.md) for what's planned and what's done.
+> **Status: early development (M1 — Core formats).** Converts images, PDFs, Word/RTF/ODT/HTML
+> documents, audio, video and subtitles. Not ready for everyday use yet.
+> See the [roadmap](docs/ROADMAP.md) for exactly what works today and what's planned.
 
 ## Why another converter
 

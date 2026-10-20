@@ -27,14 +27,16 @@ final class Job: ObservableObject, Identifiable {
 
     let id = UUID()
     let source: URL
+    let sourceFormat: FileFormat
     let destination: URL
     let target: FileFormat
     @Published var state: State = .queued
     @Published var progress: Double = 0
     var task: Task<Void, Never>?
 
-    init(source: URL, destination: URL, target: FileFormat) {
+    init(source: URL, sourceFormat: FileFormat, destination: URL, target: FileFormat) {
         self.source = source
+        self.sourceFormat = sourceFormat
         self.destination = destination
         self.target = target
     }
@@ -49,14 +51,15 @@ final class JobStore: ObservableObject {
 
     let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
     let outputDirectory: URL
-    private let runner: WorkerRunner?
+    private let worker: URL?
     private let maxConcurrent = max(1, min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
     private var running = 0
     private var reserved: Set<URL> = []
 
     init() {
         outputDirectory = Self.realDownloadsDirectory().appendingPathComponent("Ameya", isDirectory: true)
-        runner = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker").map { WorkerRunner(executable: $0) }
+        worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker")
+        Self.removeStaleScratchFolders()
     }
 
     var targets: [FileFormat] {
@@ -98,7 +101,7 @@ final class JobStore: ObservableObject {
                 reserved.contains(candidate) || FileManager.default.fileExists(atPath: candidate.path)
             }
             reserved.insert(destination)
-            jobs.insert(Job(source: file.url, destination: destination, target: target), at: 0)
+            jobs.insert(Job(source: file.url, sourceFormat: file.format, destination: destination, target: target), at: 0)
         }
         pending = []
         startQueuedJobs()
@@ -125,14 +128,15 @@ final class JobStore: ObservableObject {
     }
 
     private func start(_ job: Job) {
-        guard let runner else {
+        guard let worker else {
             job.state = .failed("The converter is missing from the app bundle.")
             return
         }
+        let runner = WorkerRunner(executable: worker, timeout: job.sourceFormat.family.timeout)
         running += 1
         job.state = .running
         job.task = Task { [weak self] in
-            let request = ConversionRequest(target: job.target)
+            let request = ConversionRequest(source: job.sourceFormat, target: job.target)
             do {
                 let result = try await runner.run(input: job.source, destination: job.destination, request: request) { value in
                     Task { @MainActor in job.progress = value }
@@ -153,6 +157,20 @@ final class JobStore: ObservableObject {
         reserved.remove(job.destination)
         job.source.stopAccessingSecurityScopedResource()
         startQueuedJobs()
+    }
+
+    /// Workers delete their scratch folder when they finish; one that was killed can't.
+    /// Anything older than an hour belongs to no running job.
+    static func removeStaleScratchFolders() {
+        let temporary = FileManager.default.temporaryDirectory
+        let cutoff = Date().addingTimeInterval(-3600)
+        let entries = (try? FileManager.default.contentsOfDirectory(
+            at: temporary, includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
+        for entry in entries where entry.lastPathComponent.hasPrefix("ameya-worker-") {
+            let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            if modified < cutoff { try? FileManager.default.removeItem(at: entry) }
+        }
     }
 
     /// The user's real Downloads folder. Inside the sandbox, `FileManager` would return the

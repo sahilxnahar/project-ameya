@@ -32,10 +32,14 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
 
 /// What the app asks the worker to do. Sent as JSON on the worker's command line.
 public struct ConversionRequest: Codable, Sendable, Equatable {
+    /// The source format as detected by the app. The worker can't see file names, and some
+    /// formats (DOCX vs ODT, M4A vs MP4) can't be told apart from the first bytes alone.
+    public var source: FileFormat?
     public var target: FileFormat
     public var options: ConversionOptions
 
-    public init(target: FileFormat, options: ConversionOptions = ConversionOptions()) {
+    public init(source: FileFormat? = nil, target: FileFormat, options: ConversionOptions = ConversionOptions()) {
+        self.source = source
         self.target = target
         self.options = options
     }
@@ -47,6 +51,13 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case onlyFirstFrameKept
     case onlyFirstPageKept
     case animationBecamePages
+    case formattingRemoved
+    case onlyTextKept
+    case onlySoundKept
+    case soundRemoved
+    case gifShortened
+    case lossyAudio
+    case subtitleStylingRemoved
 
     public var message: String {
         switch self {
@@ -54,6 +65,13 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .onlyFirstFrameKept: "Only the first frame of the animation was kept."
         case .onlyFirstPageKept: "Only the first page was kept."
         case .animationBecamePages: "Each animation frame became a separate page."
+        case .formattingRemoved: "Formatting such as fonts, colours and images is removed."
+        case .onlyTextKept: "Only the text is kept; layout and pictures are not."
+        case .onlySoundKept: "Only the sound is kept."
+        case .soundRemoved: "Sound is removed, and colours are limited to 256."
+        case .gifShortened: "Only the first 30 seconds were turned into a GIF."
+        case .lossyAudio: "AAC is compressed, so some audio detail is lost."
+        case .subtitleStylingRemoved: "Subtitle positions and styling are removed."
         }
     }
 }
@@ -83,7 +101,23 @@ public struct ConversionMatrix: Sendable {
 
     /// Targets offered for one source format, in display order. Never includes the source itself.
     public func targets(for source: FileFormat) -> [FileFormat] {
-        FileFormat.allCases.filter { $0 != source && writable.contains($0) }
+        FileFormat.allCases.filter { $0 != source && writable.contains($0) && Self.canConvert(from: source, to: $0) }
+    }
+
+    /// Whether Ameya has an engine for this pair, regardless of what this Mac can encode.
+    public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
+        guard source != target else { return false }
+        switch (source.family, target.family) {
+        case (.image, .image): return true
+        case (.image, .document): return target == .pdf
+        case (.image, .video): return source == .gif
+        case (.document, .document):
+            return source == .pdf ? target.isTextDocument : (target.isTextDocument || target == .pdf)
+        case (.document, .image): return source == .pdf
+        case (.audio, .audio), (.video, .video), (.video, .audio), (.subtitle, .subtitle): return true
+        case (.video, .image): return target == .gif
+        default: return false
+        }
     }
 
     /// Targets every one of the given sources can be converted to.
@@ -97,6 +131,26 @@ public struct ConversionMatrix: Sendable {
 
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
+        switch (source.family, target.family) {
+        case (.document, .document) where source == .pdf:
+            return [.onlyTextKept]
+        case (.document, .document) where target == .txt:
+            return [.formattingRemoved]
+        case (.video, .audio):
+            return target == .m4a ? [.onlySoundKept, .lossyAudio] : [.onlySoundKept]
+        case (.video, .image):
+            return [.soundRemoved, .gifShortened]
+        case (.audio, .audio):
+            return target == .m4a && !source.isLossy ? [.lossyAudio] : []
+        case (.subtitle, .subtitle):
+            return source == .vtt ? [.subtitleStylingRemoved] : []
+        case (.image, .video):
+            return [.transparencyFilledWhite]
+        case (.image, _), (.document, .image):
+            break // image rules below
+        default:
+            return []
+        }
         var notes: [ConversionNote] = []
         if source.supportsAlpha && !target.supportsAlpha {
             notes.append(.transparencyFilledWhite)

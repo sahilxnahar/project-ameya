@@ -31,8 +31,8 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 | # | Milestone | Exit criteria | Status |
 |---|---|---|---|
-| M0 | Foundation | Package builds, sandboxed app + XPC worker, job engine with timeout/cancel, image conversion end-to-end, tests and CI green | 🚧 |
-| M1 | Core formats | Images, PDF, audio/video, documents, subtitles, archives with fixture tests | ⬜ |
+| M0 | Foundation | Package builds, sandboxed app + per-job worker, job engine with timeout/cancel, image conversion end-to-end, tests and CI green | ✅ |
+| M1 | Core formats | Images, PDF, audio/video, documents, subtitles, archives with fixture tests | 🚧 (see "Working today" below) |
 | M2 | Ways in | Global drag wheel, menu bar, command palette, Finder actions, Shortcuts, Services, CLI | ⬜ |
 | M3 | Tools | Image, video, audio, PDF and file tools (below) | ⬜ |
 | M4 | Smart features | OCR, background removal, transcription, translation, smart redaction | ⬜ |
@@ -182,6 +182,19 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 ## Formats
 
+### Working today
+
+| Family | Converts | Notes |
+|---|---|---|
+| Images | JPEG, PNG, HEIC, AVIF, TIFF, BMP, GIF ↔ each other; WebP in | Animation and pages kept where the target supports them |
+| PDF | Images ↔ PDF pages; PDF → TXT, RTF, HTML, DOCX, DOC, ODT | PDF text extraction; scanned PDFs need OCR (M4) |
+| Documents | TXT, RTF, HTML, DOCX, DOC, ODT ↔ each other, and → PDF (A4) | Tables, lists and images laid out by the system text engine |
+| Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
+| Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
+| Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
+
+Not yet: MP3 output, WebP output, Markdown, EPUB, archives, the FFmpeg-based formats (MKV, WebM, …).
+
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.
 
@@ -200,6 +213,11 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | Live Photo → MOV/GIF | ✔ | — | AV | P1 |
 | HDR → SDR tone mapping, CMYK for print, P3 ↔ sRGB | ✔ | ✔ | Core Image / ColorSync | P1 |
 | PSD (flattened), EXR, Radiance HDR, TGA, DDS, PBM/PGM/PPM, QOI | ✔ | partial | IIO / Own | P2 |
+| iPhone HDR photos (gain map) → SDR or HDR-aware JPEG/HEIC | ✔ | ✔ | IIO / Core Image | P1 |
+| Spatial (3D) photos → side-by-side or single-eye image | ✔ | — | IIO | P1 |
+| JPEG 2000 (JP2) | ✔ | ✔ | IIO | P1 |
+| DICOM (medical), FITS (astronomy) | ✔ | — | Own | P2 |
+| Adobe swatches (.ase, .aco) ↔ colour palette (PNG, CSS, JSON) | ✔ | ✔ | Own | P2 |
 
 ### Video
 
@@ -209,6 +227,11 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | GIF, animated WebP, APNG from video | — | ✔ | IIO | P0 |
 | ProRes | ✔ | ✔ | AV | P1 |
 | MKV, WebM (VP9/AV1), AVI, FLV, WMV, MPEG-TS, 3GP | ✔ | WebM, MKV | FF | P1 |
+| GIF → MP4/MOV | ✔ | ✔ | AV | P0 |
+| iPhone spatial video (MV-HEVC) → side-by-side or 2D | ✔ | — | AV | P1 |
+| HDR video (Dolby Vision, HLG) → SDR | ✔ | — | AV | P1 |
+| Animated AVIF and animated WebP output | — | ✔ | IIO / Own | P1 |
+| Lottie (.json, .lottie) → GIF / MP4 | ✔ | — | Own renderer | P2 |
 
 ### Audio
 
@@ -220,6 +243,8 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | Opus, Ogg Vorbis, WMA, AMR | ✔ | Opus, Ogg | FF | P1 |
 | M4R ringtone | — | ✔ | AV | P1 |
 | MIDI → audio (built-in synth) | ✔ | — | AVAudioUnitSampler | P2 |
+| Several MP3s/M4As → one M4B audiobook with chapters | ✔ | ✔ | AV | P1 |
+| LRC synced lyrics ↔ SRT/VTT | ✔ | ✔ | Own | P2 |
 
 ### Documents
 
@@ -234,6 +259,13 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | EML / MSG → PDF | ✔ | — | Own + WK | P1 |
 | Pages, Numbers, Keynote (preview-based export) | ✔ | — | Quick Look | P2 |
 | XLSX, PPTX input | ✔ | — | Own (OOXML parser) | P2 |
+| Comic books CBZ/CBR ↔ PDF | ✔ | ✔ | LA + PK | P1 |
+| DRM-free Kindle MOBI/AZW3, FB2 → EPUB | ✔ | — | Own | P2 |
+| Jupyter notebooks (.ipynb) → PDF, HTML, Markdown | ✔ | — | Own + WK | P1 |
+| Source code → syntax-highlighted PDF/HTML | ✔ | — | Own | P1 |
+| AsciiDoc, reStructuredText → HTML/PDF | ✔ | — | Own | P2 |
+| MBOX mailbox → split EML / PDF | ✔ | — | Own + WK | P2 |
+| EPS / PostScript | ✘ | ✘ | — | Not planned: macOS removed its converter and Ghostscript is AGPL |
 
 ### Data and text
 
@@ -243,6 +275,11 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | Pretty-print / minify JSON, XML | ✔ | ✔ | Own | P1 |
 | VCF and ICS split/merge | ✔ | ✔ | Own | P2 |
 | Base64 encode/decode | ✔ | ✔ | Own | P2 |
+| SQLite → CSV / JSON (per table) | ✔ | — | SQLite3 (system) | P1 |
+| TOML ↔ JSON ↔ YAML | ✔ | ✔ | Own | P1 |
+| GPX, KML, GeoJSON conversions; photos' GPS → GPX track | ✔ | ✔ | Own | P1 |
+| Parquet → CSV | ✔ | — | Own | P2 |
+| Xcode string catalogs (.xcstrings), .strings ↔ CSV | ✔ | ✔ | Own | P2 |
 
 ### Subtitles
 
@@ -257,7 +294,11 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 |---|---|---|---|---|
 | TTF, OTF ↔ WOFF, WOFF2 | ✔ | ✔ | Own + Brotli (MIT) | P2 |
 | USDZ, USD, OBJ, STL, PLY | ✔ | ✔ | MI | P2 |
+| GLB / glTF ↔ USDZ (AR Quick Look on iPhone) | ✔ | ✔ | MI + Own | P1 |
+| 3MF (3D printing) | ✔ | ✔ | Own | P2 |
 | ZIP (incl. AES-encrypted), TAR, TAR.GZ, TAR.XZ | ✔ | ✔ | LA | P1 |
 | 7z, RAR, DMG, ISO (extract only) | ✔ | — | LA / hdiutil | P1 |
+| Zstandard, LZ4, bzip2, xz | ✔ | ✔ | LA | P1 |
+| macOS installer packages (.pkg) — extract contents | ✔ | — | LA (xar) | P2 |
 
 Archive extraction is bounded (size, file count, nesting depth) and rejects path traversal and links that escape the output folder.

@@ -9,9 +9,21 @@ public enum ConversionError: Error, Equatable, LocalizedError {
     case tooLarge(pixels: Int, limit: Int)
     case lockedPDF
     case encodeFailed(FileFormat)
+    case unsupportedConversion(from: FileFormat, to: FileFormat)
+    case noText
+    case noAudioTrack
+    case noVideoTrack
+    case noSubtitles
+    case mediaFailed(String)
 
     public var errorDescription: String? {
         switch self {
+        case .unsupportedConversion(let from, let to): "Ameya can't convert \(from.displayName) to \(to.displayName) yet."
+        case .noText: "This PDF has no selectable text. (It may be a scan; text recognition is coming.)"
+        case .noAudioTrack: "This file has no sound to convert."
+        case .noVideoTrack: "This file has no video."
+        case .noSubtitles: "No subtitles were found in this file."
+        case .mediaFailed(let reason): "The conversion failed: \(reason)"
         case .unreadable: "This file couldn't be read. It may be damaged or not an image."
         case .unsupportedTarget(let format): "This Mac can't create \(format.displayName) files."
         case .tooLarge(let pixels, let limit): "The image is too large (\(pixels / 1_000_000) MP, limit \(limit / 1_000_000) MP)."

@@ -21,7 +21,7 @@ struct MainView: View {
         }
         .padding(20)
         .frame(width: 460)
-        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image, .pdf], allowsMultipleSelection: true) { result in
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { store.add(urls) }
         }
     }
@@ -31,8 +31,11 @@ struct MainView: View {
             Image(systemName: "tray.and.arrow.down")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(isTargeted ? Color.accentColor : .secondary)
-            Text("Drop images or PDFs here")
+            Text("Drop files here")
                 .font(.headline)
+            Text("Images, PDFs, documents, audio, video and subtitles")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             Button("Choose Files…") { isImporting = true }
                 .keyboardShortcut("o")
         }
@@ -48,7 +51,7 @@ struct MainView: View {
             return !urls.isEmpty
         } isTargeted: { isTargeted = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Drop zone. Drop images or PDFs, or choose files.")
+        .accessibilityLabel("Drop zone. Drop files to convert, or choose files.")
     }
 
     private var targetPicker: some View {
@@ -67,7 +70,7 @@ struct MainView: View {
                     .foregroundStyle(.secondary)
             } else {
                 Text("Convert to").font(.subheadline).foregroundStyle(.secondary)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     ForEach(store.targets) { target in
                         TargetButton(target: target, notes: store.possibleLosses(to: target)) {
                             store.convert(to: target)

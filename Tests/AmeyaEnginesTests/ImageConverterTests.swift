@@ -8,7 +8,7 @@ import Testing
 @Suite("Image conversion")
 struct ImageConverterTests {
     static let writableImageTargets = FileFormat.allCases.filter {
-        $0 != .pdf && FileFormat.systemWritable().contains($0)
+        $0.family == .image && FileFormat.systemWritable().contains($0)
     }
 
     @Test("A transparent PNG converts to every writable format", arguments: writableImageTargets)
