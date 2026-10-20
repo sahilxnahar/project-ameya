@@ -35,7 +35,10 @@ public enum OutputPlanner {
     /// The file name without its extension. Hidden files keep their leading dot stripped,
     /// so outputs are always visible in Finder.
     static func baseName(of url: URL) -> String {
-        var name = url.deletingPathExtension().lastPathComponent
+        var trimmed = url.deletingPathExtension()
+        // Compound archive extensions: "photos.tar.gz" → "photos".
+        if trimmed.pathExtension.lowercased() == "tar" { trimmed = trimmed.deletingPathExtension() }
+        var name = trimmed.lastPathComponent
         while name.hasPrefix(".") { name.removeFirst() }
         return name.isEmpty ? "Converted" : name
     }

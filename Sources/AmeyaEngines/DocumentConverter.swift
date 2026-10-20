@@ -7,6 +7,10 @@ import PDFKit
 @MainActor
 enum DocumentConverter {
     static func convert(_ data: Data, from source: FileFormat, to target: FileFormat) throws -> (Data, [ConversionNote]) {
+        // Markdown → HTML is rendered directly, which keeps semantic tags and code formatting.
+        if source == .md && target == .html {
+            return (Data(try MarkdownRenderer.html(decodeText(data)).utf8), [])
+        }
         var notes: [ConversionNote] = []
         let text: NSAttributedString
         if source == .pdf {
@@ -17,6 +21,9 @@ enum DocumentConverter {
         }
         if target == .txt && source != .txt && source != .pdf {
             notes.append(.formattingRemoved)
+        }
+        if target == .md && source != .txt {
+            notes.append(.markdownSimplified)
         }
         let output = target == .pdf ? try PaginatedPDF.render(text) : try write(text, as: target)
         return (output, notes)
@@ -40,6 +47,10 @@ enum DocumentConverter {
                 .font: NSFont(name: "Helvetica", size: 12) ?? NSFont.systemFont(ofSize: 12),
             ])
         }
+        if format == .md {
+            let html = try MarkdownRenderer.html(decodeText(data))
+            return try read(Data(html.utf8), as: .html)
+        }
         guard let type = documentType(for: format) else { throw ConversionError.unreadable }
         var options: [NSAttributedString.DocumentReadingOptionKey: Any] = [.documentType: type]
         if format == .html {
@@ -55,6 +66,9 @@ enum DocumentConverter {
     static func write(_ text: NSAttributedString, as format: FileFormat) throws -> Data {
         if format == .txt {
             return Data(text.string.utf8)
+        }
+        if format == .md {
+            return Data(MarkdownWriter.markdown(from: text).utf8)
         }
         guard let type = documentType(for: format) else { throw ConversionError.unsupportedTarget(format) }
         var attributes: [NSAttributedString.DocumentAttributeKey: Any] = [.documentType: type]

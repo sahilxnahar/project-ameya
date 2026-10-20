@@ -58,6 +58,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case gifShortened
     case lossyAudio
     case subtitleStylingRemoved
+    case markdownSimplified
+    case madeSquareIcon
+    case rawDevelopedWithDefaults
+    case unsafeEntriesSkipped
+    case specialFilesSkipped
 
     public var message: String {
         switch self {
@@ -72,6 +77,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .gifShortened: "Only the first 30 seconds were turned into a GIF."
         case .lossyAudio: "AAC is compressed, so some audio detail is lost."
         case .subtitleStylingRemoved: "Subtitle positions and styling are removed."
+        case .markdownSimplified: "Headings, lists, links, tables, bold and italic are kept; fonts, colours and images are not."
+        case .madeSquareIcon: "The image was made square and saved at every standard icon size."
+        case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
+        case .unsafeEntriesSkipped: "Entries with unsafe paths (absolute, or containing ..) were left out."
+        case .specialFilesSkipped: "Links pointing outside the archive and special files were left out."
         }
     }
 }
@@ -116,6 +126,7 @@ public struct ConversionMatrix: Sendable {
         case (.document, .image): return source == .pdf
         case (.audio, .audio), (.video, .video), (.video, .audio), (.subtitle, .subtitle): return true
         case (.video, .image): return target == .gif
+        case (.archive, .archive): return target != .rar
         default: return false
         }
     }
@@ -133,9 +144,15 @@ public struct ConversionMatrix: Sendable {
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
         switch (source.family, target.family) {
         case (.document, .document) where source == .pdf:
-            return [.onlyTextKept]
+            return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]
         case (.document, .document) where target == .txt:
             return [.formattingRemoved]
+        case (.document, .document) where target == .md:
+            return [.markdownSimplified]
+        case (.image, .image) where target.isIcon:
+            return [.madeSquareIcon]
+        case (.image, _) where source == .raw:
+            return [.rawDevelopedWithDefaults]
         case (.video, .audio):
             return target == .m4a ? [.onlySoundKept, .lossyAudio] : [.onlySoundKept]
         case (.video, .image):

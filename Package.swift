@@ -7,8 +7,10 @@ let package = Package(
     targets: [
         // Formats, capability matrix, output naming, worker protocol and runner. No UI.
         .target(name: "AmeyaCore"),
+        // The system libarchive (BSD-2-Clause), which macOS ships without headers.
+        .target(name: "CArchive", linkerSettings: [.linkedLibrary("archive")]),
         // Conversion engines. Linked only into the worker process.
-        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore"]),
+        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore", "CArchive"]),
         // One short-lived, sandboxed process per job. Reads stdin, writes stdout.
         .executableTarget(name: "AmeyaWorker", dependencies: ["AmeyaCore", "AmeyaEngines"]),
         // The menu bar app.

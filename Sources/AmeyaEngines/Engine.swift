@@ -50,6 +50,9 @@ public enum Engine {
             try data.write(to: output)
             notes = gifNotes
 
+        case (.archive, .archive):
+            notes = try ArchiveConverter.repack(input: input, to: target, output: output, progress: progress)
+
         case (.subtitle, .subtitle):
             let (data, subtitleNotes) = try SubtitleConverter.convert(try read(input), from: source, to: target)
             try data.write(to: output)

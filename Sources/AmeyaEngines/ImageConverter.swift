@@ -73,6 +73,13 @@ public enum ImageConverter {
             notes.append(.transparencyFilledWhite)
         }
 
+        if target.isIcon {
+            frames = try iconSizes(for: target, fitting: frames[0].image).map { side in
+                DecodedFrame(image: try squareIcon(frames[0].image, side: side), delay: nil, metadata: [:])
+            }
+            notes = [.madeSquareIcon]
+        }
+
         let output: Data
         if target == .pdf {
             output = try PDFWriter.write(frames)
@@ -130,6 +137,31 @@ public enum ImageConverter {
             throw ConversionError.encodeFailed(target)
         }
         return output as Data
+    }
+
+    /// Standard icon sizes up to the image's larger side (always at least the smallest one).
+    static func iconSizes(for target: FileFormat, fitting image: CGImage) throws -> [Int] {
+        // ICNS has no 64 px slot (64 px appears only as 32 px @2x, which needs the 32 px image).
+        let standard = target == .icns ? [16, 32, 128, 256, 512, 1024] : [16, 24, 32, 48, 64, 128, 256]
+        let largest = max(image.width, image.height)
+        let sizes = standard.filter { $0 <= largest }
+        return sizes.isEmpty ? [standard[0]] : sizes
+    }
+
+    /// The image scaled to fit a transparent square, centred.
+    static func squareIcon(_ image: CGImage, side: Int) throws -> CGImage {
+        guard let context = CGContext(
+            data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { throw ConversionError.encodeFailed(.ico) }
+        let scale = Double(side) / Double(max(image.width, image.height))
+        let width = Double(image.width) * scale
+        let height = Double(image.height) * scale
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: (Double(side) - width) / 2, y: (Double(side) - height) / 2, width: width, height: height))
+        guard let icon = context.makeImage() else { throw ConversionError.encodeFailed(.ico) }
+        return icon
     }
 
     static func flattenOnWhite(_ image: CGImage) throws -> CGImage {

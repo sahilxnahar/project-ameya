@@ -16,9 +16,16 @@ struct ImageConverterTests {
         let source = try Fixtures.encode([Fixtures.halfTransparent()], as: .png)
         let (output, result) = try ImageConverter.convert(source, request: ConversionRequest(target: target))
 
-        #expect(FileFormat.sniff(output) == target)
+        #expect(FileFormat.detect(header: output.prefix(512), fileExtension: target.preferredExtension) == target)
         #expect(result.outputBytes == output.count)
         let decoded = try #require(Fixtures.decode(output))
+        if target.isIcon {
+            // 64×48 becomes square icons at every standard size that fits (ICNS has no 64 px slot).
+            #expect(decoded.allSatisfy { $0.width == $0.height })
+            #expect(decoded.map(\.width).max() == (target == .icns ? 32 : 64), "\(decoded.map(\.width))")
+            #expect(result.notes == [.madeSquareIcon])
+            return
+        }
         #expect(decoded.count == 1)
         #expect(decoded[0].width == 64 && decoded[0].height == 48)
         if !target.supportsAlpha {
