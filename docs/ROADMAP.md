@@ -1,0 +1,263 @@
+# Project Ameya — Roadmap
+
+A native macOS file converter and toolbox. Drag files, pick an action, get a new file.
+Everything runs on the Mac: no account, no upload, no usage limits. Licensed MPL-2.0.
+
+Priorities: **P0** ships in v1.0 · **P1** follows in v1.x · **P2** later or exploratory.
+Status: ✅ done · 🚧 in progress · ⬜ not started.
+
+## Principles
+
+1. **Originals are never modified.** Every job writes a new file. A checksum proves the source is unchanged.
+2. **The interface never freezes.** All file work runs in a separate sandboxed worker process with time and memory limits. Cancel kills the worker; a crash fails one job, not the app.
+3. **Private by default.** No network access for file processing. AI features run on-device only.
+4. **Honest output.** If a conversion loses something (transparency, layers, pages, quality), the app says so before it runs.
+5. **Tested on real files.** Every engine ships with fixtures and round-trip tests. CI runs on every push.
+6. **Licence-clean.** MPL-2.0 project code. No GPL code. Satsuma (MIT) may be reused with credit. FFmpeg only as an LGPL build without GPL encoders; H.264/HEVC encoding uses Apple VideoToolbox.
+
+## Architecture
+
+| Part | Responsibility |
+|---|---|
+| `Ameya` (app) | Menu bar, drop window, drag wheel, settings, job list. Sandboxed. Owns file access. |
+| `AmeyaWorker` (helper process) | Does the actual conversion. **One fresh process per job**, inheriting the app's sandbox. It never opens files by path: the app hands it the source as a read-only stdin and a hidden temporary file as stdout. A hang, crash or runaway job affects only that job; cancel and timeout kill it instantly. |
+| `AmeyaCore` | Format registry, capability matrix, output naming, worker protocol and runner. Pure Swift, fully unit-tested. |
+| `AmeyaEngines` | Conversion engines (ImageIO, PDFKit, AVFoundation, Vision, textutil, libarchive, LGPL FFmpeg). Run inside the worker. |
+
+Targets macOS 14 Sonoma or later, universal binary (Apple silicon + Intel). Features that need newer
+macOS versions (e.g. on-device language models on macOS 26) are switched on only where available.
+
+## Milestones
+
+| # | Milestone | Exit criteria | Status |
+|---|---|---|---|
+| M0 | Foundation | Package builds, sandboxed app + XPC worker, job engine with timeout/cancel, image conversion end-to-end, tests and CI green | 🚧 |
+| M1 | Core formats | Images, PDF, audio/video, documents, subtitles, archives with fixture tests | ⬜ |
+| M2 | Ways in | Global drag wheel, menu bar, command palette, Finder actions, Shortcuts, Services, CLI | ⬜ |
+| M3 | Tools | Image, video, audio, PDF and file tools (below) | ⬜ |
+| M4 | Smart features | OCR, background removal, transcription, translation, smart redaction | ⬜ |
+| M5 | Workflows | Recipes, goal presets, undo/history, watch folders, shelf | ⬜ |
+| M6 | Reach | iPhone/iPad app + Share extension, plug-ins, localisation | ⬜ |
+| M7 | Release | Notarized builds (needs Apple Developer account), auto-update, accessibility audit, website | ⬜ |
+
+## Features
+
+### Foundation and trust
+
+| Feature | Priority | Status |
+|---|---|---|
+| Sandboxed app + one sandboxed worker process per job, no file paths | P0 | ✅ |
+| Job queue: parallel jobs, progress, per-job timeout, hard cancel, crash isolation | P0 | ✅ |
+| Safe output: never overwrite (RENAME_EXCL), unique names, atomic write, source opened read-only | P0 | ✅ |
+| Save to Downloads/Ameya | P0 | ✅ |
+| Save beside the original (sandbox "related items") or a chosen folder | P0 | ⬜ |
+| Capability matrix: only offer conversions this Mac can do; warn about losses before converting | P0 | ✅ |
+| Animated and multi-page images handled frame by frame; EXIF orientation applied | P0 | ✅ |
+| Decompression-bomb guard (pixel and frame limits checked before decoding) | P0 | ✅ |
+| Privacy check before sharing: show hidden metadata, remove in one click | P0 | ⬜ |
+| Large real-world fixture corpus + fuzzing of every parser | P1 | ⬜ |
+
+### Ways in
+
+| Feature | Priority | Status |
+|---|---|---|
+| Menu bar icon + drop window (basic; design pass pending) | P0 | 🚧 |
+| Global drag wheel (hold Shift/Command/Control while dragging), remappable keys | P0 | ⬜ |
+| Keyboard command palette (full keyboard and VoiceOver access) | P0 | ⬜ |
+| Finder right-click Quick Actions + macOS Services | P0 | ⬜ |
+| Shortcuts / App Intents for every action | P0 | ⬜ |
+| Suggested actions: likeliest actions for this file shown first | P1 | ⬜ |
+| Clipboard conversion: convert what's copied, paste the result | P1 | ⬜ |
+| `ameya` command-line tool | P1 | ⬜ |
+| Local MCP server so AI agents can convert files on the Mac | P1 | ⬜ |
+| Shelf: collect files from several places, then act | P1 | ⬜ |
+| Raycast / Alfred extensions | P2 | ⬜ |
+
+### Image tools
+
+| Feature | Priority | Status |
+|---|---|---|
+| Compress (quality or target size), resize, crop, rotate/flip | P0 | ⬜ |
+| Edit (exposure, contrast, saturation, …) with hold-to-compare | P0 | ⬜ |
+| Redact (blur, pixelate, solid) + auto-detect faces and number plates | P0 | ⬜ |
+| Background removal (on-device) and cut-out sticker with outline | P0 | ⬜ |
+| Add background / frame, screenshot beautifier (shadow, corners, device frame) | P0 | ⬜ |
+| Annotate: arrows, boxes, text, numbered steps | P1 | ⬜ |
+| Watermark in bulk (text or logo) | P1 | ⬜ |
+| Collage, contact sheet, sprite sheet | P1 | ⬜ |
+| Upscale, denoise, straighten/flatten photographed documents | P1 | ⬜ |
+| Passport / visa photo maker (country presets) | P1 | ⬜ |
+| Colour palette extraction, portrait background blur | P2 | ⬜ |
+| Duplicate and near-duplicate photo finder | P2 | ⬜ |
+
+### Video tools
+
+| Feature | Priority | Status |
+|---|---|---|
+| Trim, split, crop, change speed, join | P0 | ⬜ |
+| Compress with size presets (email, WhatsApp, Discord 10 MB) | P0 | ⬜ |
+| Extract audio, save frames, thumbnail grid, video → GIF with size target | P0 | ⬜ |
+| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | ⬜ |
+| Redact video (blur regions, auto-blur faces) | P1 | ⬜ |
+| Auto-cut silences | P1 | ⬜ |
+| Landscape → vertical 9:16 following the subject | P1 | ⬜ |
+| Stabilise, split at scene changes | P2 | ⬜ |
+
+### Audio tools
+
+| Feature | Priority | Status |
+|---|---|---|
+| Trim, merge, fade, normalise loudness (incl. −16 LUFS podcast preset) | P0 | ⬜ |
+| Channels (mono/stereo/swap), speed and pitch | P0 | ⬜ |
+| Transcribe to text | P0 | ⬜ |
+| Bleep words, voice isolation / noise removal | P1 | ⬜ |
+| Ringtone maker (.m4r), trim silence, audio visualiser video | P1 | ⬜ |
+| BPM and key detection | P2 | ⬜ |
+
+### PDF tools
+
+| Feature | Priority | Status |
+|---|---|---|
+| Merge, split, reorder, rotate, delete pages | P0 | ⬜ |
+| Compress (to target size) | P0 | ⬜ |
+| OCR → searchable PDF | P0 | ⬜ |
+| True redaction (removes underlying text) + auto-find emails, phones, Aadhaar/PAN | P0 | ⬜ |
+| Sign and fill forms | P1 | ⬜ |
+| Add/remove password, page numbers, watermark, flatten | P1 | ⬜ |
+| Extract images, extract tables → CSV/Excel | P1 | ⬜ |
+| Compare two PDFs, booklet and n-up printing, PDF/A | P2 | ⬜ |
+| Read aloud → audio file | P2 | ⬜ |
+
+### Any-file tools
+
+| Feature | Priority | Status |
+|---|---|---|
+| Edit/remove metadata (all, sensitive, GPS only) | P0 | ⬜ |
+| Checksums + verify a download against a published hash | P0 | ⬜ |
+| Batch rename (patterns, date taken, content-based names) | P1 | ⬜ |
+| Password-encrypt a file (opens on other platforms) | P1 | ⬜ |
+| Send to phone over Wi-Fi via QR code (local, expiring) | P1 | ⬜ |
+| AirDrop, iCloud Drive / Dropbox folder save | P1 | ⬜ |
+| QR code create and read | P1 | ⬜ |
+| Sort into folders by date/place, find largest files, duplicate cleanup | P2 | ⬜ |
+| Base64, split/join large files, check an app's code signature | P2 | ⬜ |
+
+### Smart features (on-device only)
+
+| Feature | Priority | Status |
+|---|---|---|
+| OCR (images and PDFs), translation | P0 | ⬜ |
+| Rename by content | P1 | ⬜ |
+| Alt text for images | P1 | ⬜ |
+| Summarise documents (macOS 26+ on-device model) | P2 | ⬜ |
+
+### Workflows
+
+| Feature | Priority | Status |
+|---|---|---|
+| Undo and history (outputs go to Trash, never deleted) | P0 | ⬜ |
+| Goal presets: "Fit for email", "Under 200 KB for a portal", "WhatsApp-ready" | P0 | ⬜ |
+| Recipes: chain steps, pin to the wheel, run on 1 or 500 files | P1 | ⬜ |
+| Watch folders | P1 | ⬜ |
+| Share recipes as `.ameyarecipe` files | P1 | ⬜ |
+
+### Reach
+
+| Feature | Priority | Status |
+|---|---|---|
+| iPhone/iPad app + Share-sheet extension (same engine) | P1 | ⬜ |
+| Localisation (Hindi first) | P1 | ⬜ |
+| Sandboxed plug-in system for community formats | P2 | ⬜ |
+| Community gallery of recipes and plug-ins | P2 | ⬜ |
+
+### Release
+
+| Feature | Priority | Status |
+|---|---|---|
+| CI: build, tests, app bundle and sandboxed self-test on every push | P0 | ✅ |
+| Universal binary, macOS 14+ | P0 | ✅ |
+| Accessibility audit (VoiceOver, keyboard, Reduce Motion/Transparency) | P0 | ⬜ |
+| Developer ID signing + notarization + auto-update (needs Apple Developer account) | P0 | ⬜ |
+| Website with docs and downloads | P1 | ⬜ |
+
+## Formats
+
+Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
+**WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.
+
+### Images
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| JPEG, PNG, HEIC, TIFF, BMP, GIF (still and animated) | ✔ | ✔ | IIO | P0 |
+| WebP | ✔ | ✔ | IIO in, Own/libwebp out | P0 |
+| AVIF | ✔ | ✔ | IIO | P0 |
+| ICO, ICNS, favicon set, iOS/macOS app-icon set | ✔ | ✔ | IIO + Own | P0 |
+| PDF (page ↔ image) | ✔ | ✔ | PK | P0 |
+| RAW: DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2 | ✔ | — | Core Image RAW | P0 |
+| SVG | ✔ | ✔ (traced) | WK render / Own trace | P1 |
+| JPEG XL | ✔ | ✔ | IIO (where supported) | P1 |
+| Live Photo → MOV/GIF | ✔ | — | AV | P1 |
+| HDR → SDR tone mapping, CMYK for print, P3 ↔ sRGB | ✔ | ✔ | Core Image / ColorSync | P1 |
+| PSD (flattened), EXR, Radiance HDR, TGA, DDS, PBM/PGM/PPM, QOI | ✔ | partial | IIO / Own | P2 |
+
+### Video
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| MP4 (H.264, HEVC), MOV, M4V | ✔ | ✔ | AV | P0 |
+| GIF, animated WebP, APNG from video | — | ✔ | IIO | P0 |
+| ProRes | ✔ | ✔ | AV | P1 |
+| MKV, WebM (VP9/AV1), AVI, FLV, WMV, MPEG-TS, 3GP | ✔ | WebM, MKV | FF | P1 |
+
+### Audio
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| MP3 (in), AAC/M4A, WAV, AIFF, CAF, ALAC | ✔ | ✔ except MP3 out | AV | P0 |
+| MP3 out | — | ✔ | FF (LAME is LGPL) | P0 |
+| FLAC | ✔ | ✔ | AV / FF | P0 |
+| Opus, Ogg Vorbis, WMA, AMR | ✔ | Opus, Ogg | FF | P1 |
+| M4R ringtone | — | ✔ | AV | P1 |
+| MIDI → audio (built-in synth) | ✔ | — | AVAudioUnitSampler | P2 |
+
+### Documents
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| TXT, RTF, RTFD, HTML | ✔ | ✔ | TU | P0 |
+| DOCX, DOC, ODT, WordML | ✔ | ✔ | TU | P0 |
+| PDF ↔ DOCX / TXT (with OCR fallback) | ✔ | ✔ | PK + Vision + Own | P0 |
+| Markdown | ✔ | ✔ | Own | P0 |
+| Web page URL / .webarchive → PDF, Markdown | ✔ | — | WK | P1 |
+| EPUB ↔ PDF, EPUB from Markdown/DOCX | ✔ | ✔ | WK + Own | P1 |
+| EML / MSG → PDF | ✔ | — | Own + WK | P1 |
+| Pages, Numbers, Keynote (preview-based export) | ✔ | — | Quick Look | P2 |
+| XLSX, PPTX input | ✔ | — | Own (OOXML parser) | P2 |
+
+### Data and text
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| CSV, TSV, JSON, XLSX (out), XML, YAML, plist | ✔ | ✔ | Own | P1 |
+| Pretty-print / minify JSON, XML | ✔ | ✔ | Own | P1 |
+| VCF and ICS split/merge | ✔ | ✔ | Own | P2 |
+| Base64 encode/decode | ✔ | ✔ | Own | P2 |
+
+### Subtitles
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| SRT, WebVTT | ✔ | ✔ | Own | P0 |
+| ASS/SSA, SBV, TTML | ✔ | ✔ | Own | P1 |
+
+### Fonts, 3D, archives
+
+| Format | In | Out | Engine | Priority |
+|---|---|---|---|---|
+| TTF, OTF ↔ WOFF, WOFF2 | ✔ | ✔ | Own + Brotli (MIT) | P2 |
+| USDZ, USD, OBJ, STL, PLY | ✔ | ✔ | MI | P2 |
+| ZIP (incl. AES-encrypted), TAR, TAR.GZ, TAR.XZ | ✔ | ✔ | LA | P1 |
+| 7z, RAR, DMG, ISO (extract only) | ✔ | — | LA / hdiutil | P1 |
+
+Archive extraction is bounded (size, file count, nesting depth) and rejects path traversal and links that escape the output folder.
