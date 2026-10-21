@@ -85,7 +85,13 @@ public enum ImageConverter {
             output = try PDFWriter.write(frames)
         } else {
             let animated = decoded.kind == .animated && target.supportsAnimation && frames.count > 1
-            output = try encode(frames, as: target, animated: animated, loopCount: decoded.loopCount, quality: request.options.quality) { fraction in
+            // WebP: lossless for sources that were lossless, unless the user picked a quality.
+            let losslessSource: Set<FileFormat> = [.png, .tiff, .bmp, .gif]
+            let lossless = request.options.quality == nil && FileFormat.sniff(data.prefix(32)).map(losslessSource.contains) == true
+            output = try encode(
+                frames, as: target, animated: animated, loopCount: decoded.loopCount,
+                quality: request.options.quality, lossless: lossless
+            ) { fraction in
                 progress(0.4 + 0.6 * fraction)
             }
         }
@@ -99,8 +105,14 @@ public enum ImageConverter {
         animated: Bool,
         loopCount: Int,
         quality: Double?,
+        lossless: Bool = false,
         progress: (Double) -> Void
     ) throws -> Data {
+        if target == .webp {
+            return try WebPEncoder.encode(
+                frames, animated: animated, loopCount: loopCount, quality: quality, lossless: lossless, progress: progress
+            )
+        }
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             output, target.typeIdentifier as CFString, frames.count, nil

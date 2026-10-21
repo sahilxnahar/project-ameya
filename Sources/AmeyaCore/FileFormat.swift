@@ -253,6 +253,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             switch format {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
             case .rar: false // proprietary; extraction only
+            case .webp: true // bundled libwebp encoder (ImageIO only decodes WebP)
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true
             }
