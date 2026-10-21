@@ -2,8 +2,12 @@
 # Builds ameya-ffmpeg: a static, universal (arm64 + x86_64), LGPL-only FFmpeg command-line
 # tool that the worker runs as a separate process for Ogg, Opus, MP3, MKV, WebM and AVI.
 #
-#   ./scripts/build-ffmpeg.sh            -> .build-deps/ffmpeg/bin/ameya-ffmpeg
-#   ARCHS=arm64 ./scripts/build-ffmpeg.sh   one architecture only (faster)
+#   ./scripts/build-ffmpeg.sh                 -> .build-deps/ffmpeg/bin/ameya-ffmpeg
+#   ARCHS=arm64 ./scripts/build-ffmpeg.sh     one architecture only (faster)
+#   ./scripts/build-ffmpeg.sh --sources-only  download and verify the source tarballs, build nothing
+#
+# The exact upstream tarballs are kept in .build-deps/sources/ with a SHA256SUMS file. Releases
+# attach them (with this script) as the LGPL "complete corresponding source"; see release.yml.
 #
 # Licence rules (see THIRD_PARTY_NOTICES.md): FFmpeg is configured WITHOUT --enable-gpl and
 # WITHOUT --enable-nonfree, so the result is LGPL-2.1-or-later. External libraries are LAME
@@ -12,10 +16,15 @@
 # official sites and checked against the SHA-256 sums below before anything is built.
 set -eu
 
+case "${1:-}" in
+    "" | --sources-only) ;;
+    *) echo "usage: $0 [--sources-only]" >&2; exit 2 ;;
+esac
+
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 DEPS="$ROOT/.build-deps"
-SRC="$DEPS/src"
+SRC="$DEPS/sources"
 OUT="$DEPS/ffmpeg/bin"
 ARCHS="${ARCHS:-arm64 x86_64}"
 MIN_MACOS=14.0
@@ -83,6 +92,17 @@ fetch "$OGG_URL" "libogg-$OGG_VERSION.tar.xz" "$OGG_SHA256"
 fetch "$VORBIS_URL" "libvorbis-$VORBIS_VERSION.tar.xz" "$VORBIS_SHA256"
 fetch "$VPX_URL" "libvpx-$VPX_VERSION.tar.gz" "$VPX_SHA256"
 fetch "$NASM_URL" "nasm-$NASM_VERSION.tar.xz" "$NASM_SHA256"
+
+# A checksum list for the source bundle, re-verified so it can't drift from the sums above.
+(cd "$SRC" && shasum -a 256 \
+    "ffmpeg-$FFMPEG_VERSION.tar.xz" "lame-$LAME_VERSION.tar.gz" "opus-$OPUS_VERSION.tar.gz" \
+    "libogg-$OGG_VERSION.tar.xz" "libvorbis-$VORBIS_VERSION.tar.xz" "libvpx-$VPX_VERSION.tar.gz" \
+    "nasm-$NASM_VERSION.tar.xz" > SHA256SUMS && shasum -a 256 -c --quiet SHA256SUMS)
+
+if [ "${1:-}" = "--sources-only" ]; then
+    echo "Verified sources in $SRC"
+    exit 0
+fi
 
 for tool in curl shasum clang make lipo pkg-config; do
     command -v "$tool" >/dev/null || { echo "error: $tool is required (pkg-config: brew install pkgconf)" >&2; exit 1; }

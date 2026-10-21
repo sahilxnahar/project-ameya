@@ -9,25 +9,45 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: macos-latest
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Toolchain
+        id: toolchain
         run: |
           sw_vers
           xcodebuild -version
           swift --version
+          echo "id=$( (xcodebuild -version; swift --version) 2>&1 | shasum -a 256 | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
-      # The LGPL FFmpeg helper takes a while to build, so it is cached until the script changes.
+      # SwiftPM build products, per toolchain. An exact hit needs identical sources; otherwise the
+      # newest build for this Package.swift is restored and only changed files recompile.
+      # Saved right after the tests, so the release build of the app doesn't bloat the cache.
+      - name: Restore SwiftPM build
+        id: spm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: spm-${{ runner.os }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift') }}-${{ hashFiles('Sources/**', 'Tests/**') }}
+          restore-keys: |
+            spm-${{ runner.os }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift') }}-
+
+      # The LGPL FFmpeg helper takes a while to build, so it is cached (with the exact source
+      # tarballs it was built from) until the script changes. release.yml uses the same key.
       - name: Cache FFmpeg helper
         id: ffmpeg-cache
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: .build-deps/ffmpeg/bin
+          path: |
+            .build-deps/ffmpeg/bin
+            .build-deps/sources
           key: ameya-ffmpeg-${{ runner.os }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
 
       - name: Build FFmpeg helper (LGPL)
@@ -37,12 +57,28 @@ jobs:
           ./scripts/build-ffmpeg.sh
 
       - name: Build
-        run: swift build
+        run: swift build --build-tests
 
-      - name: Test
+      # The FFmpeg formats must disappear cleanly when the helper is missing, so test that path too.
+      - name: Test without the FFmpeg helper
+        run: |
+          mv .build-deps/ffmpeg .build-deps/ffmpeg.off
+          status=0
+          swift test || status=$?
+          mv .build-deps/ffmpeg.off .build-deps/ffmpeg
+          exit $status
+
+      - name: Test with the FFmpeg helper
         run: swift test
         env:
           AMEYA_FFMPEG: ${{ github.workspace }}/.build-deps/ffmpeg/bin/ameya-ffmpeg
+
+      - name: Save SwiftPM build
+        if: steps.spm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
 
       - name: Build app bundle (universal)
         run: ./scripts/build-app.sh
@@ -53,8 +89,10 @@ jobs:
       - name: Package
         run: ditto -c -k --keepParent dist/Ameya.app dist/Ameya.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: Ameya-${{ github.sha }}
           path: dist/Ameya.zip
+          if-no-files-found: error
           retention-days: 14
+

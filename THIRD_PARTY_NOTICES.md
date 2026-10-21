@@ -17,7 +17,7 @@ This file lists third-party software that is distributed with or linked by Ameya
 ## libarchive
 
 - **Licence:** BSD-2-Clause
-- **Used for:** archives. Ameya links the copy that ships with macOS (`/usr/lib/libarchive.2.dylib`); no libarchive code is vendored, only declarations of the API it uses in `Sources/CArchive`.
+- **Used for:** archives and single-file compression, inside the conversion worker only (the app itself does not link it). Ameya links the copy that ships with macOS (`/usr/lib/libarchive.2.dylib`); no libarchive code is vendored, only declarations of the API it uses in `Sources/CArchive`.
 
 ## The FFmpeg helper (`Ameya.app/Contents/MacOS/ameya-ffmpeg`)
 
@@ -71,16 +71,28 @@ folder the static libraries above were installed into; the x86_64 build on an Ap
 
 `ameya-ffmpeg -L` prints the licence of the shipped binary; `ameya-ffmpeg -buildconf` prints its configuration.
 
-### Source code offer (LGPL)
+### Source code (LGPL)
 
-The complete corresponding source for the LGPL components of `ameya-ffmpeg` is the unmodified upstream
-FFmpeg 8.1.3 and LAME 3.100 tarballs listed above, plus the build script
-[`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh) in this repository, which records every configure option
-and the two small build fixes applied (removing an obsolete linker flag from libvorbis's `configure`, and
-removing the undefined `lame_init_old` symbol from LAME's export list). Running the script reproduces the
-binary. Because the helper is a separate executable, you may replace `Contents/MacOS/ameya-ffmpeg` with your
-own build of FFmpeg (re-sign the app afterwards). For at least three years from each release of Ameya we will
-also provide the same source on request through the project's issue tracker.
+The complete corresponding source for `ameya-ffmpeg` is:
+
+- the unmodified upstream tarballs listed above (FFmpeg 8.1.3, LAME 3.100, libvpx 1.15.2, libopus 1.5.2,
+  libogg 1.3.6 and libvorbis 1.3.7), identified by their SHA-256 sums; and
+- the build script [`scripts/build-ffmpeg.sh`](scripts/build-ffmpeg.sh), which records every configure option
+  and the two small build fixes applied (removing an obsolete linker flag from libvorbis's `configure`, and
+  removing the undefined `lame_init_old` symbol from LAME's export list). Running it reproduces the binary.
+
+**With every release.** Each release on the project's GitHub Releases page
+(https://github.com/sahilxnahar/project-ameya/releases) carries, next to the app,
+`third-party-sources-<version>.tar.gz`: the exact tarballs that release's helper was built from, their
+`SHA256SUMS`, the build script, this file and `LICENSES/`.
+
+**Written offer.** For at least three years after we last distribute a given release of Ameya, we will give
+anyone who asks a complete machine-readable copy of the source above for that release, for no charge beyond
+the cost of physically providing it (normally nothing: a download link). To ask, open an issue at
+https://github.com/sahilxnahar/project-ameya/issues naming the Ameya version.
+
+Because the helper is a separate executable, you may replace `Contents/MacOS/ameya-ffmpeg` with your own
+build of FFmpeg (re-sign the app afterwards).
 
 The full text of the GNU Lesser General Public License version 2.1 is in
 [`LICENSES/LGPL-2.1.txt`](LICENSES/LGPL-2.1.txt) (copied from the FFmpeg source release). LAME is licensed under

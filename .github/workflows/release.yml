@@ -1,0 +1,134 @@
+name: Release
+
+# Builds, tests and publishes a GitHub Release for a version tag (v1.2.3, or v1.2.3-beta.1 for a
+# pre-release). The release carries the app, checksums, and the exact upstream sources of the LGPL
+# FFmpeg helper with the script that builds it (the "complete corresponding source").
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and publish, e.g. v0.1.0"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      - name: Version
+        id: version
+        run: |
+          case "$TAG" in
+            v[0-9]*) ;;
+            *) echo "error: '$TAG' is not a version tag (v1.2.3)" >&2; exit 1 ;;
+          esac
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      # Same key as ci.yml: the helper binary plus the exact source tarballs it was built from.
+      - name: Cache FFmpeg helper
+        id: ffmpeg-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build-deps/ffmpeg/bin
+            .build-deps/sources
+          key: ameya-ffmpeg-${{ runner.os }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Build FFmpeg helper (LGPL)
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          command -v pkg-config || brew install pkgconf
+          ./scripts/build-ffmpeg.sh
+
+      # Re-verifies every tarball against the SHA-256 sums pinned in the script (downloading any
+      # that are missing) and writes .build-deps/sources/SHA256SUMS.
+      - name: Verify FFmpeg sources
+        run: ./scripts/build-ffmpeg.sh --sources-only
+
+      - name: Test
+        run: swift test
+        env:
+          AMEYA_FFMPEG: ${{ github.workspace }}/.build-deps/ffmpeg/bin/ameya-ffmpeg
+
+      - name: Build app bundle (universal)
+        run: |
+          ./scripts/build-app.sh
+          test -x dist/Ameya.app/Contents/MacOS/ameya-ffmpeg || { echo "error: the release must include the FFmpeg helper" >&2; exit 1; }
+          lipo -archs dist/Ameya.app/Contents/MacOS/Ameya | grep -q x86_64
+          lipo -archs dist/Ameya.app/Contents/MacOS/Ameya | grep -q arm64
+
+      - name: Self-test inside the sandbox
+        run: dist/Ameya.app/Contents/MacOS/Ameya --self-test
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p release
+          ditto -c -k --keepParent dist/Ameya.app "release/Ameya-$VERSION.zip"
+
+          # Complete corresponding source for ameya-ffmpeg: the untouched upstream tarballs, the
+          # build script (configure options and the two small build fixes) and the licence texts.
+          SOURCES="third-party-sources-$VERSION"
+          STAGE="$RUNNER_TEMP/$SOURCES"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/upstream" "$STAGE/scripts"
+          cp .build-deps/sources/*.tar.* .build-deps/sources/SHA256SUMS "$STAGE/upstream/"
+          (cd "$STAGE/upstream" && shasum -a 256 -c SHA256SUMS)
+          cp scripts/build-ffmpeg.sh "$STAGE/scripts/"
+          cp THIRD_PARTY_NOTICES.md "$STAGE/"
+          cp -R LICENSES "$STAGE/LICENSES"
+          cat > "$STAGE/README.txt" <<EOF
+          Source code for the FFmpeg helper (ameya-ffmpeg) in Ameya $VERSION.
+
+          upstream/   The exact, unmodified source releases it was built from, with SHA-256 sums.
+                      NASM is a build tool only; it is not part of the shipped binary.
+          scripts/    build-ffmpeg.sh, which records every configure option and build fix.
+                      Put it in a checkout of Ameya $TAG, copy upstream/* to .build-deps/sources/,
+                      and run ./scripts/build-ffmpeg.sh to rebuild the helper.
+          LICENSES/, THIRD_PARTY_NOTICES.md   Licences and notices.
+          EOF
+          COPYFILE_DISABLE=1 tar -czf "release/$SOURCES.tar.gz" -C "$RUNNER_TEMP" "$SOURCES"
+
+          (cd release && shasum -a 256 "Ameya-$VERSION.zip" "$SOURCES.tar.gz" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<'EOF'
+          Runs entirely on your Mac. Ad-hoc signed, not notarized yet: first launch via right-click → Open; see the [README](https://github.com/sahilxnahar/project-ameya#install).
+
+          `third-party-sources-*.tar.gz` holds the exact source of the bundled LGPL FFmpeg helper and the script that builds it; check downloads against `SHA256SUMS.txt`.
+          EOF
+          set -- release/Ameya-"$VERSION".zip release/third-party-sources-"$VERSION".tar.gz release/SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$@" --clobber
+          else
+            PRERELEASE=""
+            case "$VERSION" in *-*) PRERELEASE="--prerelease" ;; esac
+            # shellcheck disable=SC2086
+            gh release create "$TAG" "$@" --verify-tag --title "Ameya $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" --generate-notes $PRERELEASE
+          fi
