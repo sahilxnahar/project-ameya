@@ -42,7 +42,13 @@ extension FileFormat {
             }
             // Most camera RAW files are TIFF underneath.
             if sniffed == .tiff, byExtension == .raw { return .raw }
+            // Compressed SVG (.svgz) is plain gzip; only the extension says what's inside.
+            if sniffed == .tgz, byExtension == .svg { return .svg }
             return sniffed
+        }
+        // An SVG whose root element sits past the header (e.g. after a long comment).
+        if byExtension == .svg, looksLikeText(bytes), svgRoot(in: bytes) == .undetermined {
+            return .svg
         }
 
         // Binary formats with no usable signature.
@@ -105,6 +111,7 @@ extension FileFormat {
         let lowered = String(decoding: bytes.prefix(32), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.hasPrefix("<!doctype html") || lowered.hasPrefix("<html") { return .html }
+        if case .svg = svgRoot(in: [UInt8](header.prefix(headerLength))) { return .svg }
 
         // Audio
         if starts("ID3") { return .mp3 }
@@ -141,6 +148,96 @@ extension FileFormat {
         }
         if starts("moov", at: 4) || starts("mdat", at: 4) || starts("wide", at: 4) { return .mov }
         return nil
+    }
+
+    public enum SVGRootScan: Equatable, Sendable {
+        /// The first element is `<svg`; `offset` is where it starts in the UTF-8 text.
+        case svg(offset: Int)
+        /// The first element is something else, or the bytes are not XML text.
+        case other
+        /// The bytes end before the first element (inside the prolog).
+        case undetermined
+    }
+
+    /// Finds the root element of XML text, skipping a byte-order mark, the XML declaration,
+    /// processing instructions, comments, whitespace and a DOCTYPE (with an internal subset).
+    /// UTF-16 text is accepted with a byte-order mark.
+    public static func svgRoot(in bytes: [UInt8]) -> SVGRootScan {
+        var text = bytes
+        if bytes.starts(with: [0xFF, 0xFE]) || bytes.starts(with: [0xFE, 0xFF]) {
+            let encoding: String.Encoding = bytes[0] == 0xFF ? .utf16LittleEndian : .utf16BigEndian
+            let even = Array(bytes.dropFirst(2).prefix((bytes.count - 2) & ~1))
+            guard let string = String(bytes: even, encoding: encoding) else { return .other }
+            text = Array(string.utf8)
+        } else if bytes.starts(with: [0xEF, 0xBB, 0xBF]) {
+            text = Array(bytes.dropFirst(3))
+        }
+        if text.contains(0) { return .other }
+
+        func has(_ prefix: String, at index: Int) -> Bool {
+            let prefix = Array(prefix.utf8)
+            return text.count >= index + prefix.count && prefix.indices.allSatisfy { text[index + $0] == prefix[$0] }
+        }
+        func find(_ needle: String, from index: Int) -> Int? {
+            let needle = Array(needle.utf8)
+            guard text.count >= needle.count else { return nil }
+            var position = index
+            while position + needle.count <= text.count {
+                if needle.indices.allSatisfy({ text[position + $0] == needle[$0] }) { return position }
+                position += 1
+            }
+            return nil
+        }
+
+        var index = 0
+        while index < text.count {
+            let byte = text[index]
+            if [0x20, 0x09, 0x0A, 0x0D].contains(byte) { index += 1; continue }
+            guard byte == UInt8(ascii: "<") else { return .other }
+            if index + 1 >= text.count { return .undetermined }
+            if has("<?", at: index) {
+                guard let end = find("?>", from: index + 2) else { return .undetermined }
+                index = end + 2
+            } else if has("<!--", at: index) {
+                guard let end = find("-->", from: index + 4) else { return .undetermined }
+                index = end + 3
+            } else if has("<!", at: index) {
+                guard text.count >= index + 9 else { return .undetermined }
+                guard String(decoding: text[index..<index + 9], as: UTF8.self).uppercased() == "<!DOCTYPE" else { return .other }
+                // Skip to the closing '>', stepping over an internal subset in [...] and quoted strings.
+                var position = index + 9
+                var inSubset = false
+                var quote: UInt8?
+                while position < text.count {
+                    let character = text[position]
+                    if let open = quote {
+                        if character == open { quote = nil }
+                    } else if character == UInt8(ascii: "\"") || character == UInt8(ascii: "'") {
+                        quote = character
+                    } else if character == UInt8(ascii: "[") {
+                        inSubset = true
+                    } else if character == UInt8(ascii: "]") {
+                        inSubset = false
+                    } else if character == UInt8(ascii: ">"), !inSubset {
+                        break
+                    }
+                    position += 1
+                }
+                guard position < text.count else { return .undetermined }
+                index = position + 1
+            } else {
+                // The root element. Accept `<svg` and a namespace prefix such as `<svg:svg`.
+                var nameEnd = index + 1
+                while nameEnd < text.count, ![0x20, 0x09, 0x0A, 0x0D, UInt8(ascii: ">"), UInt8(ascii: "/")].contains(text[nameEnd]) {
+                    nameEnd += 1
+                }
+                guard nameEnd < text.count else { return .undetermined }
+                let name = String(decoding: text[(index + 1)..<nameEnd], as: UTF8.self)
+                let local = name.split(separator: ":").last.map(String.init) ?? name
+                return local == "svg" ? .svg(offset: index) : .other
+            }
+        }
+        return .undetermined
     }
 
     /// True when the bytes contain no NULs, or start with a UTF-16 byte-order mark.

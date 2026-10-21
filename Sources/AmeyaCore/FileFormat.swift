@@ -8,6 +8,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case heics, jp2, psd, exr, tga, pbm, ktx, ktx2, astc, ico, icns
     // Images that can only be read: camera RAW, JPEG XL, DICOM, Radiance HDR, SGI
     case raw, jxl, dicom, hdr, sgi
+    // Vector images that can only be read (rendered to pixels or to a vector PDF)
+    case svg
     // Documents
     case pdf, txt, rtf, html, docx, doc, odt, md
     // Audio. `alac` is Apple Lossless in an .m4a file; it is only ever a target.
@@ -41,7 +43,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         switch self {
         case .jpeg, .png, .heic, .avif, .webp, .tiff, .bmp, .gif,
              .heics, .jp2, .psd, .exr, .tga, .pbm, .ktx, .ktx2, .astc, .ico, .icns,
-             .raw, .jxl, .dicom, .hdr, .sgi: .image
+             .raw, .jxl, .dicom, .hdr, .sgi, .svg: .image
         case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md: .document
         case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
         case .mp4, .mov, .m4v: .video
@@ -76,6 +78,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .dicom: "DICOM"
         case .hdr: "Radiance HDR"
         case .sgi: "SGI"
+        case .svg: "SVG"
         case .pdf: "PDF"
         case .txt: "Plain Text"
         case .rtf: "RTF"
@@ -133,6 +136,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .dicom: "org.nema.dicom"
         case .hdr: "public.radiance"
         case .sgi: "com.sgi.sgi-image"
+        case .svg: "public.svg-image"
         case .pdf: "com.adobe.pdf"
         case .txt: "public.plain-text"
         case .rtf: "public.rtf"
@@ -179,6 +183,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .dicom: ["dcm", "dicom"]
         case .hdr: ["hdr", "rgbe"]
         case .sgi: ["sgi", "rgb", "bw"]
+        case .svg: ["svg", "svgz"]
         case .txt: ["txt", "text", "log"]
         case .html: ["html", "htm", "xhtml"]
         case .md: ["md", "markdown", "mdown", "mkd"]
@@ -208,7 +213,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     public var supportsAlpha: Bool {
         switch self {
         case .png, .heic, .avif, .webp, .tiff, .gif, .pdf, .heics, .jp2, .psd, .exr, .tga,
-             .ktx, .ktx2, .astc, .ico, .icns, .jxl, .sgi: true
+             .ktx, .ktx2, .astc, .ico, .icns, .jxl, .sgi, .svg: true
         default: false
         }
     }

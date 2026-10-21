@@ -48,6 +48,19 @@ enum SelfTest {
                 await check.convert(mp4, from: .mp4, to: .gif)
             }
 
+            let svg = directory.appendingPathComponent("drawing.svg")
+            try Data(##"<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60" viewBox="0 0 12 6"><rect width="6" height="6" fill="#e66a1a"/><text x="7" y="4" font-size="3">A</text></svg>"##.utf8).write(to: svg)
+            await check.convert(svg, from: .svg, to: .png)
+            if let pdf = await check.convert(svg, from: .svg, to: .pdf) {
+                // Vector output: no embedded bitmap, page sized from the SVG.
+                let bytes = (try? Data(contentsOf: pdf)) ?? Data()
+                let page = CGPDFDocument(pdf as CFURL)?.page(at: 1)
+                let vector = page?.getBoxRect(.mediaBox).size == CGSize(width: 120, height: 60)
+                    && !String(decoding: bytes, as: UTF8.self).contains("/Subtype /Image")
+                print("\(vector ? "PASS" : "FAIL") svg -> pdf is vector (\(bytes.count) bytes)")
+                if !vector { check.allPassed = false }
+            }
+
             let srt = directory.appendingPathComponent("captions.srt")
             try Data("1\n00:00:01,000 --> 00:00:02,500\nHello\n".utf8).write(to: srt)
             await check.convert(srt, from: .srt, to: .vtt)

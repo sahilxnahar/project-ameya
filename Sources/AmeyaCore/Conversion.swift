@@ -8,6 +8,9 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var maxPixels: Int
     /// Upper bound on pages/frames read from one file.
     public var maxFrames: Int
+    /// Long side, in pixels, for images drawn from vectors (SVG). `nil` keeps the SVG's own size,
+    /// or 1024 px when it has none.
+    public var rasterLongSide: Int? = nil
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
@@ -63,6 +66,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case rawDevelopedWithDefaults
     case unsafeEntriesSkipped
     case specialFilesSkipped
+    case externalResourcesSkipped
 
     public var message: String {
         switch self {
@@ -82,6 +86,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
         case .unsafeEntriesSkipped: "Entries with unsafe paths (absolute, or containing ..) were left out."
         case .specialFilesSkipped: "Links pointing outside the archive and special files were left out."
+        case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
         }
     }
 }
