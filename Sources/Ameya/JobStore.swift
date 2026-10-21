@@ -26,19 +26,42 @@ final class Job: ObservableObject, Identifiable {
     }
 
     let id = UUID()
-    let source: URL
-    let sourceFormat: FileFormat
+    /// One file, or several for tools that work on all files together (in order).
+    let sources: [URL]
+    let sourceFormats: [FileFormat]
+    /// A file, or a folder when `isFolder` (tools that produce several files).
     let destination: URL
-    let target: FileFormat
+    let isFolder: Bool
+    /// Built up front: a plain conversion or a tool's request.
+    let request: ConversionRequest
+    /// The tool's name, for status text. `nil` for a plain conversion.
+    let toolTitle: String?
     @Published var state: State = .queued
     @Published var progress: Double = 0
     var task: Task<Void, Never>?
 
-    init(source: URL, sourceFormat: FileFormat, destination: URL, target: FileFormat) {
-        self.source = source
-        self.sourceFormat = sourceFormat
+    init(sources: [URL], sourceFormats: [FileFormat], destination: URL, isFolder: Bool = false,
+         request: ConversionRequest, toolTitle: String? = nil) {
+        self.sources = sources
+        self.sourceFormats = sourceFormats
         self.destination = destination
-        self.target = target
+        self.isFolder = isFolder
+        self.request = request
+        self.toolTitle = toolTitle
+    }
+
+    var target: FileFormat { request.target }
+
+    /// What the row says while the job runs.
+    var activity: String {
+        let subject = sources.count == 1 ? sources[0].lastPathComponent : "\(sources.count) files"
+        if let toolTitle { return "\(toolTitle): \(subject)…" }
+        return "Converting \(subject)…"
+    }
+
+    /// The longest timeout among the sources' families.
+    var timeout: Duration {
+        sourceFormats.map(\.family.timeout).max() ?? .seconds(300)
     }
 }
 
@@ -49,7 +72,8 @@ final class JobStore: ObservableObject {
     @Published private(set) var unsupported: [String] = []
     @Published private(set) var jobs: [Job] = []
 
-    let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
+    let matrix: ConversionMatrix
+    let catalog: ToolCatalog
     let outputDirectory: URL
     private let worker: URL?
     private let maxConcurrent = max(1, min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
@@ -57,6 +81,9 @@ final class JobStore: ObservableObject {
     private var reserved: Set<URL> = []
 
     init() {
+        let writable = FileFormat.systemWritable()
+        matrix = ConversionMatrix(writable: writable)
+        catalog = ToolCatalog(writable: writable)
         outputDirectory = Self.realDownloadsDirectory().appendingPathComponent("Ameya", isDirectory: true)
         worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker")
         Self.removeStaleScratchFolders()
@@ -94,23 +121,59 @@ final class JobStore: ObservableObject {
         unsupported = []
     }
 
+    /// Tools that apply to every pending file.
+    var tools: [Tool] {
+        catalog.available(for: pending.map(\.format))
+    }
+
     func convert(to target: FileFormat) {
         try? FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for file in pending {
-            let destination = OutputPlanner.destination(for: file.url, target: target, in: outputDirectory) { candidate in
-                reserved.contains(candidate) || FileManager.default.fileExists(atPath: candidate.path)
-            }
-            reserved.insert(destination)
-            jobs.insert(Job(source: file.url, sourceFormat: file.format, destination: destination, target: target), at: 0)
+            let destination = OutputPlanner.destination(for: file.url, target: target, in: outputDirectory, isTaken: isTaken)
+            enqueue(Job(sources: [file.url], sourceFormats: [file.format], destination: destination,
+                        request: ConversionRequest(source: file.format, target: target)))
         }
         pending = []
         startQueuedJobs()
     }
 
+    /// Runs `tool` on the pending files. `options`, from the tool's panel, replace the tool's own.
+    func run(_ tool: Tool, options: ConversionOptions? = nil) {
+        guard !pending.isEmpty, tool.isAvailable(pending.map(\.format)) else { return }
+        try? FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let groups: [[PendingFile]] = switch tool.mode {
+        case .eachFile: pending.map { [$0] }
+        case .allTogether: [pending]
+        }
+        for files in groups {
+            let first = files[0]
+            var request = tool.makeRequest(first.format)
+            if let options { request.options = options }
+            if files.count > 1 { request.inputs = files.map(\.format) }
+            let destination = tool.producesFolder
+                ? OutputPlanner.folderDestination(for: first.url, suffix: tool.outputSuffix, in: outputDirectory, isTaken: isTaken)
+                : OutputPlanner.destination(for: first.url, target: request.target, in: outputDirectory,
+                                            suffix: tool.outputSuffix, isTaken: isTaken)
+            enqueue(Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
+                        isFolder: tool.producesFolder, request: request, toolTitle: tool.title))
+        }
+        pending = []
+        startQueuedJobs()
+    }
+
+    private func isTaken(_ candidate: URL) -> Bool {
+        reserved.contains(candidate.standardizedFileURL) || FileManager.default.fileExists(atPath: candidate.path)
+    }
+
+    private func enqueue(_ job: Job) {
+        reserved.insert(job.destination.standardizedFileURL)
+        jobs.insert(job, at: 0)
+    }
+
     func cancel(_ job: Job) {
         if job.state == .queued {
             job.state = .cancelled
-            reserved.remove(job.destination)
+            release(job)
         } else {
             job.task?.cancel()
         }
@@ -132,13 +195,12 @@ final class JobStore: ObservableObject {
             job.state = .failed("The converter is missing from the app bundle.")
             return
         }
-        let runner = WorkerRunner(executable: worker, timeout: job.sourceFormat.family.timeout)
+        let runner = WorkerRunner(executable: worker, timeout: job.timeout)
         running += 1
         job.state = .running
         job.task = Task { [weak self] in
-            let request = ConversionRequest(source: job.sourceFormat, target: job.target)
             do {
-                let result = try await runner.run(input: job.source, destination: job.destination, request: request) { value in
+                let result = try await runner.run(inputs: job.sources, destination: job.destination, request: job.request) { value in
                     Task { @MainActor in job.progress = value }
                 }
                 job.progress = 1
@@ -154,9 +216,13 @@ final class JobStore: ObservableObject {
 
     private func finish(_ job: Job) {
         running -= 1
-        reserved.remove(job.destination)
-        job.source.stopAccessingSecurityScopedResource()
+        release(job)
         startQueuedJobs()
+    }
+
+    private func release(_ job: Job) {
+        reserved.remove(job.destination.standardizedFileURL)
+        job.sources.forEach { $0.stopAccessingSecurityScopedResource() }
     }
 
     /// Workers delete their scratch folder when they finish; one that was killed can't.

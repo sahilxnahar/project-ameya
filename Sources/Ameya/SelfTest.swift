@@ -67,6 +67,8 @@ enum SelfTest {
             }
             await check.convert(csv, from: .csv, to: .xlsx)
 
+            await check.checkTools(png: png) // see SelfTestTools.swift
+
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
             let passed = check.allPassed && unchanged
