@@ -157,6 +157,20 @@ final class JobStore: ObservableObject {
         return jobs.filter { !before.contains($0.id) }
     }
 
+    /// Runs `tool` on `urls` straight away (the drag wheel) without touching what the user has
+    /// pending. Does nothing if the tool doesn't suit every file. Returns the new jobs.
+    @discardableResult
+    func runNow(_ tool: Tool, on urls: [URL]) -> [Job] {
+        let savedPending = pending, savedUnsupported = unsupported
+        pending = []
+        add(urls)
+        let before = Set(jobs.map(\.id))
+        run(tool)
+        pending = savedPending
+        unsupported = savedUnsupported
+        return jobs.filter { !before.contains($0.id) }
+    }
+
     /// Runs `tool` on the pending files. `options`, from the tool's panel, replace the tool's own.
     func run(_ tool: Tool, options: ConversionOptions? = nil) {
         guard !pending.isEmpty, tool.isAvailable(pending.map(\.format)) else { return }
