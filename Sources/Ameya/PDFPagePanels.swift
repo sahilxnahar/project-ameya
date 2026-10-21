@@ -1,18 +1,18 @@
 import AmeyaCore
-import PDFKit
 import SwiftUI
 
 /// A grid of page thumbnails for "Remove pages…" and "Reorder pages…".
 ///
 /// Keyboard: arrow keys move between pages, Space marks a page (remove), ⌥ + arrow keys move the
 /// focused page (reorder). VoiceOver reads each page as "Page 3 of 12" and offers the same actions.
+/// The page images are drawn by the sandboxed worker (PDFPreviewModel); the app never opens the PDF.
 struct PageGridPanel: View {
     enum Mode { case remove, reorder }
     let mode: Mode
     let finish: (AmeyaCore.PDFAction) -> Void
 
     @EnvironmentObject private var store: JobStore
-    @State private var pdf: PendingPDF?
+    @StateObject private var preview = PDFPreviewModel()
     /// Original page numbers (1-based) in their current order.
     @State private var order: [Int] = []
     /// Original page numbers marked for removal.
@@ -27,39 +27,44 @@ struct PageGridPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let problem = pdf?.problem {
-                PanelProblem(message: problem)
-            } else if let document = pdf?.document {
+            switch preview.state {
+            case .problem(let message):
+                PanelProblem(message: message)
+            case .ready(let info):
                 Text(mode == .remove
                      ? "Click the pages to leave out, or use the arrow keys and Space."
                      : "Drag pages into a new order, or use ⌥ and the arrow keys.")
                     .foregroundStyle(.secondary)
-                grid(document)
+                if info.isTruncated {
+                    Text("Pictures are shown for the first \(info.thumbnailCount) pages. The other pages are still listed.")
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+                grid(info)
                 footer
-            } else {
+            case .loading:
                 ProgressView().frame(maxWidth: .infinity)
             }
         }
         .frame(width: 520)
-        .onAppear(perform: load)
+        .task { await load() }
+        .onDisappear { preview.cleanUp() }
     }
 
-    private func load() {
-        guard pdf == nil else { return }
-        let opened = PendingPDF(store.pending.first?.url)
-        pdf = opened
-        order = opened.pageCount > 0 ? Array(1...opened.pageCount) : []
-        focus = order.isEmpty ? nil : 0
+    private func load() async {
+        await preview.load(store.pending.first?.url)
+        guard order.isEmpty, preview.pageCount > 0 else { return }
+        order = Array(1...preview.pageCount)
+        focus = 0
     }
 
     // MARK: Grid
 
-    private func grid(_ document: PDFDocument) -> some View {
+    private func grid(_ info: PDFPreviewInfo) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: Self.columns), spacing: 12) {
                     ForEach(Array(order.enumerated()), id: \.element) { position, page in
-                        cell(page: page, position: position, document: document)
+                        cell(page: page, position: position, info: info)
                             .id(page)
                     }
                 }
@@ -83,14 +88,14 @@ struct PageGridPanel: View {
         }
     }
 
-    private func cell(page: Int, position: Int, document: PDFDocument) -> some View {
+    private func cell(page: Int, position: Int, info: PDFPreviewInfo) -> some View {
         let isMarked = marked.contains(page)
         return VStack(spacing: 4) {
             ZStack {
                 if let image = thumbnails[page] {
                     Image(nsImage: image).resizable().scaledToFit()
                 } else {
-                    Rectangle().fill(.white)
+                    Rectangle().fill(.white).aspectRatio(aspect(of: page, in: info), contentMode: .fit)
                 }
                 if isMarked {
                     Rectangle().fill(.red.opacity(0.25))
@@ -113,9 +118,7 @@ struct PageGridPanel: View {
             if mode == .remove { toggle(page) }
         }
         .task(id: page) {
-            if thumbnails[page] == nil, let pdfPage = document.page(at: page - 1) {
-                thumbnails[page] = pdfPage.thumbnail(of: CGSize(width: 220, height: 220), for: .cropBox)
-            }
+            if thumbnails[page] == nil, let image = await preview.thumbnail(page) { thumbnails[page] = image }
         }
         .modifier(ReorderDrag(enabled: mode == .reorder, page: page) { dragged in
             guard let from = order.firstIndex(of: dragged) else { return false }
@@ -135,6 +138,13 @@ struct PageGridPanel: View {
                 Button("Move later") { move(from: position, to: position + 1) }
             }
         }
+    }
+
+    /// Width over height of a page, from the sizes the worker reported (a letter-sized page if unknown).
+    private func aspect(of page: Int, in info: PDFPreviewInfo) -> CGFloat {
+        guard info.pages.indices.contains(page - 1) else { return 0.77 }
+        let size = info.pages[page - 1]
+        return min(max(CGFloat(size.width / size.height), 0.1), 10)
     }
 
     private func arrow(_ press: KeyPress) -> KeyPress.Result {

@@ -1,37 +1,9 @@
 import AmeyaCore
-import PDFKit
 import SwiftUI
 
 // Settings panels for the PDF toolbox (see ToolCatalog.pdfToolbox). Each calls `finish` with the
-// chosen action; the surrounding sheet adds Cancel (Escape).
-
-/// The single pending PDF, opened here only to count and show its pages. Conversions themselves
-/// always run in the sandboxed worker.
-@MainActor
-final class PendingPDF: ObservableObject {
-    let document: PDFDocument?
-    let problem: String?
-
-    init(_ url: URL?) {
-        guard let url, let document = PDFDocument(url: url) else {
-            document = nil
-            problem = "Ameya couldn't open this PDF to show its pages."
-            return
-        }
-        if document.isLocked {
-            self.document = nil
-            problem = "This PDF has a password. Use “Remove password…” first."
-        } else if document.pageCount == 0 {
-            self.document = nil
-            problem = "This PDF has no pages."
-        } else {
-            self.document = document
-            problem = nil
-        }
-    }
-
-    var pageCount: Int { document?.pageCount ?? 0 }
-}
+// chosen action; the surrounding sheet adds Cancel (Escape). The app never opens a PDF itself:
+// page counts and page images come from the sandboxed worker (PDFPreviewModel).
 
 /// Shows a problem in place of a panel's controls.
 struct PanelProblem: View {
@@ -48,8 +20,11 @@ struct ExtractPagesPanel: View {
     let finish: (AmeyaCore.PDFAction) -> Void
     @EnvironmentObject private var store: JobStore
     @State private var text = ""
-    @State private var count: Int?
+    @StateObject private var preview = PDFPreviewModel()
     @FocusState private var focused: Bool
+
+    /// Known once the worker has looked at the PDF; `nil` while waiting or when it can't be read.
+    private var count: Int? { preview.info?.pageCount }
 
     var body: some View {
         let parsed = Result { try PageRanges.parse(text, pageCount: count ?? PageRanges.maxPages) }
@@ -80,17 +55,9 @@ struct ExtractPagesPanel: View {
             }
         }
         .frame(width: 380)
-        .onAppear {
-            count = PendingPDF.count(store.pending.first?.url)
-            focused = true
-        }
-    }
-}
-
-extension PendingPDF {
-    /// Page count without keeping the document open; `nil` when it can't be read.
-    static func count(_ url: URL?) -> Int? {
-        PendingPDF(url).document?.pageCount
+        .onAppear { focused = true }
+        .task { await preview.load(store.pending.first?.url, thumbnails: false) }
+        .onDisappear { preview.cleanUp() }
     }
 }
 

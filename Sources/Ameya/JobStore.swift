@@ -285,7 +285,8 @@ final class JobStore: ObservableObject {
         job.sources.forEach { $0.stopAccessingSecurityScopedResource() }
     }
 
-    /// Workers delete their scratch folder when they finish; one that was killed can't.
+    /// Workers delete their scratch folder when they finish; one that was killed can't. The same goes
+    /// for a page-panel preview folder left behind by a crash.
     /// Anything older than an hour belongs to no running job.
     static func removeStaleScratchFolders() {
         let temporary = FileManager.default.temporaryDirectory
@@ -293,7 +294,7 @@ final class JobStore: ObservableObject {
         let entries = (try? FileManager.default.contentsOfDirectory(
             at: temporary, includingPropertiesForKeys: [.contentModificationDateKey]
         )) ?? []
-        for entry in entries where entry.lastPathComponent.hasPrefix("ameya-worker-") {
+        for entry in entries where ["ameya-worker-", "ameya-preview-"].contains(where: entry.lastPathComponent.hasPrefix) {
             let modified = (try? entry.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
             if modified < cutoff { try? FileManager.default.removeItem(at: entry) }
         }

@@ -62,8 +62,42 @@ extension SelfTest.Checker {
                     pdfReport(open?.isEncrypted == false && open?.pageCount == 3, "remove password", "still encrypted")
                 }
             }
+
+            // The page panels learn about a PDF only from the worker: counts, sizes and small images.
+            await checkPreview(of: three, locked: locked, password: password)
         } catch {
             pdfReport(false, "PDF toolbox setup", error.localizedDescription)
+        }
+    }
+
+    /// Page preview through the worker: plain, locked without the password, and unlocked with it.
+    private mutating func checkPreview(of plain: URL, locked: URL, password: String) async {
+        func ask(_ url: URL, _ password: String) async throws -> PDFPreviewInfo {
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ameya-preview-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let request = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(
+                pdf: .preview(password: password, thumbnailSide: PDFPreviewInfo.defaultThumbnailSide)))
+            _ = try await runner.run(inputs: [url], destination: folder, request: request)
+            let data = try Data(contentsOf: folder.appendingPathComponent(PDFPreviewInfo.fileName))
+            let info = try JSONDecoder().decode(PDFPreviewInfo.self, from: data)
+            // Read the image before the folder is removed.
+            if info.thumbnailCount > 0 {
+                let image = try Data(contentsOf: folder.appendingPathComponent(PDFPreviewInfo.thumbnailName(1)))
+                guard image.starts(with: [0x89, 0x50, 0x4E, 0x47]) else { throw CocoaError(.fileReadCorruptFile) }
+            }
+            return info
+        }
+        do {
+            let info = try await ask(plain, "")
+            pdfReport(info.isConsistent && info.pageCount == 3 && info.thumbnailCount == 3 && !info.locked,
+                      "page preview", "got \(info.pageCount) pages, \(info.thumbnailCount) images")
+            let shut = try await ask(locked, "")
+            pdfReport(shut.locked && shut.pageCount == 0, "page preview of a locked PDF", "locked=\(shut.locked) pages=\(shut.pageCount)")
+            let open = try await ask(locked, password)
+            pdfReport(!open.locked && open.pageCount == 3 && open.thumbnailCount == 3,
+                      "page preview with the password", "locked=\(open.locked) pages=\(open.pageCount)")
+        } catch {
+            pdfReport(false, "page preview", error.localizedDescription)
         }
     }
 

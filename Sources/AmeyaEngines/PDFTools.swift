@@ -91,6 +91,9 @@ public enum PDFTools {
                                                                     scratch: scratch, progress: progress)
             return ([output], ConversionResult(outputBytes: VideoEditor.fileSize(output), frames: pages, notes: notes))
 
+        case .preview:
+            throw ConversionError.invalidData("previews are handled before the PDF tools")
+
         case .ocr, .addPageNumbers, .watermark, .protect, .removePassword:
             // Text recognition, stamps and passwords (PDFToolbox.swift).
             return try PDFToolbox.run(action, inputs: inputs, request: request, scratch: scratch, progress: progress)

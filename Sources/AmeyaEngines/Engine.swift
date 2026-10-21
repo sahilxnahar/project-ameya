@@ -21,6 +21,10 @@ public enum Engine {
             guard inputs.count == 1 else { throw ConversionError.invalidData("passport photos take one photo at a time") }
             return try PassportPhoto.run(passport, input: inputs[0], request: request, scratch: scratch, progress: progress)
         }
+        if case .preview(let password, let side) = request.options.pdf {
+            guard inputs.count == 1 else { throw ConversionError.invalidData("a preview takes one PDF") }
+            return try PDFPreview.run(inputs[0], password: password, thumbnailSide: side, scratch: scratch, progress: progress)
+        }
         if let action = request.options.pdf {
             // Text recognition also takes pictures, so it is routed before PDFTools' PDF-only checks.
             if PDFToolbox.handles(action) {

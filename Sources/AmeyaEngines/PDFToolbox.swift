@@ -63,7 +63,7 @@ public enum PDFToolbox {
             progress(1)
             return ([output], result(output, pages: Self.pageCount(output, password: nil), notes: []))
 
-        case .ocr, .merge, .splitEveryPage, .splitRanges, .rotate, .deletePages, .reorder, .compress:
+        case .ocr, .merge, .splitEveryPage, .splitRanges, .rotate, .deletePages, .reorder, .compress, .preview:
             throw ConversionError.unsupportedConversion(from: source, to: target)
         }
     }

@@ -100,11 +100,16 @@ public enum PDFAction: Codable, Sendable, Equatable {
     case protect(password: String)
     /// Writes an unencrypted copy; needs the current password. Sent to the worker on stdin.
     case removePassword(password: String)
+    /// Describes a PDF for the app (page count, locked or not, page sizes) and draws small page
+    /// images, so the app never opens the PDF itself (see PDFPreviewInfo). `thumbnailSide` is the
+    /// longest side of each image in pixels; 0 means no images. `password` opens a locked PDF.
+    case preview(password: String, thumbnailSide: Int)
 
     /// The password this action carries, if any (kept off the worker's command line).
     public var secret: String? {
         switch self {
         case .protect(let password), .removePassword(let password): password
+        case .preview(let password, _): password.isEmpty ? nil : password
         default: nil
         }
     }
@@ -114,6 +119,7 @@ public enum PDFAction: Codable, Sendable, Equatable {
         switch self {
         case .protect: .protect(password: secret)
         case .removePassword: .removePassword(password: secret)
+        case .preview(_, let side): .preview(password: secret, thumbnailSide: side)
         default: self
         }
     }
@@ -121,7 +127,7 @@ public enum PDFAction: Codable, Sendable, Equatable {
     /// Whether the action produces several files.
     public var producesSeveralFiles: Bool {
         switch self {
-        case .splitEveryPage, .splitRanges: true
+        case .splitEveryPage, .splitRanges, .preview: true
         default: false
         }
     }
