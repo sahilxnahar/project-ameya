@@ -101,7 +101,9 @@ enum QRCode {
 
     /// Payloads of every QR code and barcode in the image, top to bottom, left to right.
     static func decode(_ data: Data, options: ConversionOptions) throws -> [String] {
-        let decoded = try ImageDecoder.decode(data, options: options)
+        let decoded = SVGRenderer.looksLikeSVG(data)
+            ? try SVGRenderer.decode(data, options: options).0
+            : try ImageDecoder.decode(data, options: options)
         guard let image = decoded.frames.first?.image else { throw ConversionError.unreadable }
         return try decode(image)
     }

@@ -3,6 +3,8 @@
 Every format Project Ameya could support beyond what [works today](ROADMAP.md#working-today),
 with the implementation route and its licence. Compiled 20 October 2026.
 
+**Local-only rule:** Ameya never uses the network. Anything that needs it is not planned.
+
 **Licence rule:** Apple system frameworks and permissive code (MIT, BSD, Apache-2.0, zlib, ISC, MPL-2.0).
 LGPL only as a separate helper process (e.g. an LGPL FFmpeg build without GPL encoders). No GPL/AGPL.
 Licences marked *(verify)* came from licence files or memory and must be re-checked before shipping.
@@ -288,7 +290,7 @@ Licences marked *(verify)* came from licence files or memory and must be re-chec
 |---|---|---|---|---|---|
 | QR codes | .png .svg .pdf | In/Out | Core Image generate, Vision read | S | high |
 | Barcodes (Code 128, PDF417, Aztec) | | In/Out | Core Image, Vision | S | med |
-| Web page → PDF/PNG/webarchive | url | Out | WebKit (needs network permission) | M | high |
+| Web page → PDF/PNG | url | — | Not planned: Ameya never uses the network | — | — |
 | Link shortcuts | .webloc .url .inetloc | In/Out | Own | S | med |
 | Browser bookmarks | .html .json | In/Out | Own | S | med |
 | OPML, RSS/Atom | .opml .rss | In/Out | Own XML | S | low |
