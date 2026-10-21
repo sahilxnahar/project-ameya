@@ -8,6 +8,10 @@ import Foundation
 /// The worker never sees file names, so the original name is restored by `OutputPlanner`
 /// (from the compressed file's name, or the gzip header). Decompression is capped like
 /// `ArchiveConverter`: total size, and an expansion-ratio guard against bombs.
+///
+/// The app tells a single compressed file from a compressed TAR by name only (it never looks
+/// inside), so a TAR can arrive here under a plain ".gz" name. Decompressing still gives the
+/// user exactly the bytes inside; when those are a TAR archive the result says so.
 enum SingleFileCompression {
     struct Limits {
         var maxTotalBytes: Int64 = 16 << 30 // 16 GiB decompressed
@@ -17,13 +21,16 @@ enum SingleFileCompression {
 
     static func convert(input: URL, from source: FileFormat, to target: FileFormat, output: URL,
                         limits: Limits = Limits(), progress: (Double) -> Void) throws -> [ConversionNote] {
+        var notes: [ConversionNote] = []
         if target == .decompressed {
-            try decompress(input: input, from: source, output: output, limits: limits, progress: progress)
+            if try decompress(input: input, from: source, output: output, limits: limits, progress: progress) {
+                notes.append(.heldTarArchive)
+            }
         } else {
             try compress(input: input, to: target, output: output, progress: progress)
         }
         progress(1)
-        return []
+        return notes
     }
 
     static func compress(input: URL, to target: FileFormat, output: URL, progress: (Double) -> Void) throws {
@@ -69,7 +76,9 @@ enum SingleFileCompression {
         }
     }
 
-    static func decompress(input: URL, from source: FileFormat, output: URL, limits: Limits, progress: (Double) -> Void) throws {
+    /// Decompresses `input` to `output` and returns whether the result is a TAR archive.
+    @discardableResult
+    static func decompress(input: URL, from source: FileFormat, output: URL, limits: Limits, progress: (Double) -> Void) throws -> Bool {
         let expected: Int32 = switch source {
         case .gz: ARCHIVE_FILTER_GZIP
         case .bz2: ARCHIVE_FILTER_BZIP2
@@ -100,9 +109,10 @@ enum SingleFileCompression {
         let compressedSize = Int64((try? FileManager.default.attributesOfItem(atPath: input.path)[.size] as? Int) ?? 1)
         var buffer = [UInt8](repeating: 0, count: 1 << 20)
         var total: Int64 = 0
+        var head = Data() // the first TAR block's worth of output
         while true {
             let read = buffer.withUnsafeMutableBytes { archive_read_data(reader, $0.baseAddress, $0.count) }
-            if read == 0 { break }
+            if read == 0 { return isTarHeader(head) }
             guard read > 0 else { throw ConversionError.invalidData(message(reader) ?? "the compressed data is damaged") }
             total += Int64(read)
             guard total <= limits.maxTotalBytes else {
@@ -111,9 +121,25 @@ enum SingleFileCompression {
             if total > limits.ratioCheckAfter && total / max(compressedSize, 1) > limits.maxRatio {
                 throw ConversionError.dataLimit("it expands suspiciously (possible decompression bomb)")
             }
+            if head.count < 512 { head.append(contentsOf: buffer[0..<min(read, 512 - head.count)]) }
             try writer.write(contentsOf: Data(buffer[0..<read]))
             progress(min(0.99, Double(archive_filter_bytes(reader, -1)) / Double(max(compressedSize, 1))))
         }
+    }
+
+    /// Whether `block` is a valid TAR header (ustar, GNU or old V7): a name, and a checksum
+    /// field matching the sum of the header bytes with that field counted as spaces.
+    static func isTarHeader(_ block: Data) -> Bool {
+        let bytes = [UInt8](block)
+        guard bytes.count >= 512, bytes[0] != 0 else { return false }
+        let digits = bytes[148..<156].drop { $0 == 0x20 }.prefix { $0 != 0 && $0 != 0x20 }
+        guard !digits.isEmpty, digits.allSatisfy({ (0x30...0x37).contains($0) }),
+              let stored = Int(String(decoding: digits, as: UTF8.self), radix: 8) else { return false }
+        var sum = 0
+        for (index, byte) in bytes[0..<512].enumerated() {
+            sum += (148..<156).contains(index) ? 0x20 : Int(byte)
+        }
+        return sum == stored
     }
 
     private static func message(_ archive: OpaquePointer) -> String? {

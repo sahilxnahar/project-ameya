@@ -145,25 +145,58 @@ struct SingleFileCompressionTests {
         #expect(OutputPlanner.destination(for: compressed, target: .decompressed, in: out) { _ in false }.lastPathComponent == "report.pdf")
     }
 
-    @Test func tarArchivesStayArchivesWhateverTheirName() throws {
+    /// The app decides TAR or single file from the name alone (it never decompresses to look),
+    /// so a misnamed TAR arrives as a single compressed file. Decompressing it in the worker
+    /// gives back the TAR byte for byte and says that it is one.
+    @Test func misnamedTarArchivesDecompressToTheTarWithANote() throws {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
-        try Data("hello".utf8).write(to: folder.appendingPathComponent("a.txt"))
-        for (flag, single, archive) in [("z", "gz", FileFormat.tgz), ("j", "bz2", .tbz2), ("J", "xz", .txz)] {
-            let tarball = folder.appendingPathComponent("bundle.\(single)") // misleadingly named
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
-            process.arguments = ["-c\(flag)f", tarball.path, "-C", folder.path, "a.txt"]
-            try process.run()
-            process.waitUntilExit()
-            #expect(FileFormat.detect(at: tarball) == archive, "\(single) holding a TAR")
+        let plain = folder.appendingPathComponent("a.txt")
+        try Data("hello".utf8).write(to: plain)
+        let tar = folder.appendingPathComponent("bundle.tar")
+        try runTar(["-cf", tar.path, "-C", folder.path, "a.txt"])
 
-            // A single compressed file stays single even without a telling extension.
-            let plain = folder.appendingPathComponent("a.txt")
+        for (flag, single, archive) in [("z", "gz", FileFormat.tgz), ("j", "bz2", .tbz2), ("J", "xz", .txz)] {
+            let format = FileFormat(rawValue: single)!
+            let tarball = folder.appendingPathComponent("bundle.\(single)") // misleadingly named
+            try runTar(["-c\(flag)f", tarball.path, "-C", folder.path, "a.txt"])
+            #expect(FileFormat.detect(at: tarball) == format, "\(single) holding a TAR, judged by name")
+            let named = folder.appendingPathComponent("bundle.tar.\(single)")
+            try FileManager.default.copyItem(at: tarball, to: named)
+            #expect(FileFormat.detect(at: named) == archive)
+
+            let restored = folder.appendingPathComponent("restored-\(single)")
+            let notes = try SingleFileCompression.convert(input: tarball, from: format, to: .decompressed, output: restored) { _ in }
+            #expect(notes == [.heldTarArchive])
+            #expect(try Data(contentsOf: restored) == Data(contentsOf: tar))
+
+            // A single compressed file stays single, without a TAR note, whatever its name.
             let lone = folder.appendingPathComponent("blob-\(single).data")
-            _ = try SingleFileCompression.convert(input: plain, from: .txt, to: FileFormat(rawValue: single)!, output: lone) { _ in }
-            #expect(FileFormat.detect(at: lone) == FileFormat(rawValue: single))
+            _ = try SingleFileCompression.convert(input: plain, from: .txt, to: format, output: lone) { _ in }
+            #expect(FileFormat.detect(at: lone) == format)
+            let back = folder.appendingPathComponent("back-\(single)")
+            #expect(try SingleFileCompression.convert(input: lone, from: format, to: .decompressed, output: back) { _ in }.isEmpty)
         }
+    }
+
+    @Test func tarHeaderCheck() {
+        var block = [UInt8](repeating: 0, count: 512)
+        #expect(!SingleFileCompression.isTarHeader(Data(block)))
+        block.replaceSubrange(0..<5, with: Array("a.txt".utf8))
+        let sum = block.enumerated().reduce(0) { $0 + (($1.offset >= 148 && $1.offset < 156) ? 0x20 : Int($1.element)) }
+        block.replaceSubrange(148..<156, with: Array(String(format: "%06o\0 ", sum).utf8))
+        #expect(SingleFileCompression.isTarHeader(Data(block)))
+        block[0] = UInt8(ascii: "b") // checksum no longer matches
+        #expect(!SingleFileCompression.isTarHeader(Data(block)))
+        #expect(!SingleFileCompression.isTarHeader(Data("hello".utf8)))
+    }
+
+    private func runTar(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        process.arguments = arguments
+        try process.run()
+        process.waitUntilExit()
     }
 
     @Test func decompressionBombsAreStopped() throws {
