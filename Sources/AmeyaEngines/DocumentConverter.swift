@@ -21,7 +21,9 @@ enum DocumentConverter {
             notes.append(.onlyTextKept)
             if recognised > 0 { notes.append(.textRecognisedFromScans) }
         } else {
-            text = try read(data, as: source)
+            var skipped = false
+            text = try read(data, as: source, skippedExternal: &skipped)
+            if skipped { notes.append(.externalResourcesSkipped) }
         }
         if target == .txt && source != .txt && source != .pdf {
             notes.append(.formattingRemoved)
@@ -46,18 +48,29 @@ enum DocumentConverter {
     }
 
     static func read(_ data: Data, as format: FileFormat) throws -> NSAttributedString {
+        var skipped = false
+        return try read(data, as: format, skippedExternal: &skipped)
+    }
+
+    /// Reads a document. HTML (and Markdown, which becomes HTML) is sanitized first, so the
+    /// system reader has no outside file or web address to load; `skippedExternal` reports
+    /// whether any such reference was removed.
+    static func read(_ data: Data, as format: FileFormat, skippedExternal: inout Bool) throws -> NSAttributedString {
         if format == .txt {
             return NSAttributedString(string: decodeText(data), attributes: [
                 .font: NSFont(name: "Helvetica", size: 12) ?? NSFont.systemFont(ofSize: 12),
             ])
         }
-        if format == .md {
-            let html = try MarkdownRenderer.html(decodeText(data))
-            return try read(Data(html.utf8), as: .html)
+        var data = data
+        if format == .md || format == .html {
+            let html = format == .md ? try MarkdownRenderer.html(decodeText(data)) : decodeHTML(data)
+            let sanitized = HTMLSanitizer.sanitize(html)
+            skippedExternal = sanitized.removed
+            data = Data(sanitized.html.utf8)
         }
-        guard let type = documentType(for: format) else { throw ConversionError.unreadable }
+        guard let type = documentType(for: format == .md ? .html : format) else { throw ConversionError.unreadable }
         var options: [NSAttributedString.DocumentReadingOptionKey: Any] = [.documentType: type]
-        if format == .html {
+        if format == .html || format == .md {
             options[.characterEncoding] = String.Encoding.utf8.rawValue
         }
         do {
@@ -84,6 +97,23 @@ enum DocumentConverter {
         } catch {
             throw ConversionError.encodeFailed(format)
         }
+    }
+
+    /// HTML text: the encoding its `<meta charset>` (or `http-equiv` content type) names when
+    /// there is one and it decodes, otherwise a guess as for plain text.
+    nonisolated static func decodeHTML(_ data: Data) -> String {
+        let head = String(decoding: data.prefix(2048), as: UTF8.self).lowercased()
+        if !data.starts(with: [0xEF, 0xBB, 0xBF]), !data.starts(with: [0xFF, 0xFE]), !data.starts(with: [0xFE, 0xFF]),
+           let range = head.range(of: "charset=") {
+            let name = head[range.upperBound...].drop { $0 == "\"" || $0 == "'" || $0 == " " }
+                .prefix { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" || $0 == ":" || $0 == "." }
+            let cfEncoding = CFStringConvertIANACharSetNameToEncoding(String(name) as CFString)
+            if cfEncoding != kCFStringEncodingInvalidId,
+               let text = String(data: data, encoding: String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cfEncoding))) {
+                return text
+            }
+        }
+        return decodeText(data)
     }
 
     /// Plain text in an unknown encoding: let Foundation guess, preferring UTF-8.

@@ -58,7 +58,9 @@ enum EbookConverter {
         }
         if book.droppedImages { notes.append(.imagesDropped) }
 
-        let html = combinedHTML(book)
+        // Chapters are already cleaned element by element; this also catches style attributes.
+        let (html, externalSkipped) = HTMLSanitizer.sanitize(combinedHTML(book), forWebKit: false)
+        if externalSkipped { notes.append(.externalResourcesSkipped) }
         if target == .html { return (Data(html.utf8), notes) }
         let text = try DocumentConverter.read(Data(html.utf8), as: .html)
         guard !text.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || target != .txt else {

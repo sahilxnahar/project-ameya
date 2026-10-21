@@ -18,7 +18,7 @@ enum ModelConverter {
     static let previewSize = 1024
 
     static func convert(input: URL, to target: FileFormat, output: URL, progress: (Double) -> Void) throws -> [ConversionNote] {
-        let asset = try load(input)
+        let (asset, linksRemoved) = try load(input)
         progress(0.4)
         var notes: [ConversionNote] = []
         switch target {
@@ -43,19 +43,28 @@ enum ModelConverter {
             if target == .obj { try removeMaterialLibrary(from: output) }
             notes = [.materialsMayNotCarryOver]
         }
+        if linksRemoved { notes.append(.linkedFilesLeftOut) }
         progress(1)
         return notes
     }
 
     /// Loads a model and checks it has geometry. Model I/O picks the reader from the extension,
-    /// which the worker sets from the detected source format.
-    static func load(_ url: URL) throws -> MDLAsset {
+    /// which the worker sets from the detected source format. Links to files outside the model's
+    /// folder are removed first (see ModelReferences); the flag says whether any were.
+    static func load(_ url: URL) throws -> (MDLAsset, linksRemoved: Bool) {
         guard MDLAsset.canImportFileExtension(url.pathExtension) else { throw ConversionError.unreadable }
+        var linksRemoved: Bool
+        do {
+            linksRemoved = try ModelReferences.neutralize(url)
+        } catch ModelReferences.Failure.linksOutside {
+            throw ConversionError.invalidData("it is built from other model files elsewhere on a computer, which can't be included")
+        }
         let asset = MDLAsset(url: url)
         guard vertexCount(asset) > 0 else {
             throw ConversionError.invalidData("no 3D geometry was found in it")
         }
-        return asset
+        if ModelReferences.stripOutsideTextures(asset, folder: url.deletingLastPathComponent()) { linksRemoved = true }
+        return (asset, linksRemoved)
     }
 
     /// Total vertices across every mesh in the asset, including nested ones.

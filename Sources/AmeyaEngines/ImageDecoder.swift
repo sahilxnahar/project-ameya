@@ -44,8 +44,28 @@ enum ImageDecoder {
         let indices: [Int] = kind == .single
             ? [CGImageSourceGetPrimaryImageIndex(source)]
             : Array(0..<min(count, options.maxFrames))
+        try checkTotalPixels(source, indices: indices, options: options)
         let frames = try indices.map { try decodeFrame(source, at: $0, maxPixels: options.maxPixels) }
         return DecodedImage(frames: frames, kind: kind, loopCount: loopCount(of: source))
+    }
+
+    /// Every frame is held in memory until the output is written, so the declared sizes of all
+    /// of them together are checked before any is decoded: a small file can't claim a thousand
+    /// frames of 100 megapixels each.
+    private static func checkTotalPixels(_ source: CGImageSource, indices: [Int], options: ConversionOptions) throws {
+        let budget = options.totalPixelBudget
+        var total = 0
+        for index in indices {
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] ?? [:]
+            guard let width = properties[kCGImagePropertyPixelWidth] as? Int,
+                  let height = properties[kCGImagePropertyPixelHeight] as? Int else { continue } // decodeFrame refuses it
+            let (pixels, overflow) = max(width, 0).multipliedReportingOverflow(by: max(height, 0))
+            let (sum, sumOverflow) = total.addingReportingOverflow(pixels)
+            guard !overflow, !sumOverflow, sum <= budget else {
+                throw ConversionError.tooLarge(pixels: overflow || sumOverflow ? Int.max : sum, limit: budget)
+            }
+            total = sum
+        }
     }
 
     private static func decodeFrame(_ source: CGImageSource, at index: Int, maxPixels: Int) throws -> DecodedFrame {

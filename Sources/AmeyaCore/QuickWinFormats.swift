@@ -75,10 +75,42 @@ extension FileFormat {
         guard flags & 0x08 != 0, index < bytes.count,
               let end = bytes[index...].firstIndex(of: 0),
               let raw = String(bytes: bytes[index..<end], encoding: .isoLatin1) else { return nil }
-        var name = raw.split(separator: "/").last.map(String.init) ?? ""
-        while name.hasPrefix(".") { name.removeFirst() }
-        guard !name.isEmpty, !name.unicodeScalars.contains(where: { $0.value < 0x20 || $0 == ":" }) else { return nil }
-        return name
+        let name = raw.split(separator: "/").last.map(String.init) ?? ""
+        return restoredFileName(name)
+    }
+
+    /// The longest restored name, in UTF-8 bytes (file systems allow 255).
+    public static let maxRestoredNameBytes = 200
+
+    /// A file name that came from inside a file (a gzip header, or the name a download was
+    /// given), made safe to create: no control characters, bidirectional overrides (which can
+    /// make "evil.exe" display as "exe.live"), path separators or leading dots and spaces, at most
+    /// 200 bytes, and an extension Ameya knows, so it can't name an app, script or other file
+    /// that runs when opened. Any other extension becomes `.bin`. Nil when nothing usable is left.
+    public static func restoredFileName(_ candidate: String) -> String? {
+        let forbidden: (Unicode.Scalar) -> Bool = { scalar in
+            scalar.value < 0x20 || (0x7F...0x9F).contains(scalar.value)
+                || (0x202A...0x202E).contains(scalar.value) || (0x2066...0x2069).contains(scalar.value)
+                || scalar == "\u{200E}" || scalar == "\u{200F}" || scalar == "\u{061C}"
+                || scalar == "/" || scalar == ":" || scalar == "\\"
+        }
+        guard !candidate.unicodeScalars.contains(where: forbidden) else { return nil }
+        var name = Substring(candidate)
+        while let first = name.first, first == "." || first.isWhitespace { name.removeFirst() }
+        while let last = name.last, last == "." || last.isWhitespace { name.removeLast() }
+        guard !name.isEmpty else { return nil }
+
+        var stem = String(name), ext = ""
+        if let dot = name.lastIndex(of: "."), dot > name.startIndex {
+            stem = String(name[..<dot])
+            ext = String(name[name.index(after: dot)...])
+            if FileFormat.fromExtension(ext) == nil { ext = "bin" }
+        }
+        let suffix = ext.isEmpty ? "" : "." + ext
+        while stem.utf8.count + suffix.utf8.count > maxRestoredNameBytes, !stem.isEmpty { stem.removeLast() }
+        while let last = stem.last, last == "." || last.isWhitespace { stem.removeLast() }
+        guard !stem.isEmpty else { return nil }
+        return stem + suffix
     }
 }
 

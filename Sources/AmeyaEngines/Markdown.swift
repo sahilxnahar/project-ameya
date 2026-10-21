@@ -62,6 +62,11 @@ enum MarkdownRenderer {
             if intent.contains(.lineBreak) { html += "<br>\n"; continue }
             if intent.contains(.softBreak) { html += "\n"; continue }
             if let image = run.imageURL {
+                // A picture from a local file or an unknown scheme is left out; its text stays.
+                guard isSafe(image, allowing: ["http", "https", "data"]) else {
+                    html += escape(content)
+                    continue
+                }
                 html += "<img src=\"\(escape(image.absoluteString))\" alt=\"\(escape(content))\">"
                 continue
             }
@@ -70,10 +75,19 @@ enum MarkdownRenderer {
             if intent.contains(.emphasized) { piece = "<em>\(piece)</em>" }
             if intent.contains(.stronglyEmphasized) { piece = "<strong>\(piece)</strong>" }
             if intent.contains(.strikethrough) { piece = "<del>\(piece)</del>" }
-            if let link = run.link { piece = "<a href=\"\(escape(link.absoluteString))\">\(piece)</a>" }
+            if let link = run.link, isSafe(link, allowing: ["http", "https", "mailto"]) { piece = "<a href=\"\(escape(link.absoluteString))\">\(piece)</a>" }
             html += piece
         }
         return html
+    }
+
+    /// Relative references, fragments, and URLs with one of `schemes`. Not `file:` or `javascript:`.
+    static func isSafe(_ url: URL, allowing schemes: Set<String>) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else {
+            let text = url.absoluteString
+            return !text.hasPrefix("/") && !text.hasPrefix("~") && !text.split(separator: "/").contains("..")
+        }
+        return schemes.contains(scheme)
     }
 
     static func escape(_ text: String) -> String {

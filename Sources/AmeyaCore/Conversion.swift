@@ -8,6 +8,10 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var maxPixels: Int
     /// Upper bound on pages/frames read from one file.
     public var maxFrames: Int
+    /// Cap on decoded pixels across all frames or pages held at once (`nil`: the default,
+    /// 1.5 gigapixels), so many large frames can't add up to more memory than the Mac has.
+    public var maxTotalPixels: Int? = nil
+    public var totalPixelBudget: Int { maxTotalPixels ?? Self.defaultMaxTotalPixels }
     /// Long side, in pixels, for images drawn from vectors (SVG). `nil` keeps the SVG's own size,
     /// or 1024 px when it has none.
     public var rasterLongSide: Int? = nil
@@ -37,6 +41,7 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
+    public static let defaultMaxTotalPixels = 1_500_000_000
 
     public init(
         quality: Double? = nil,
@@ -150,6 +155,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case heldTarArchive
     case transcribedOnDevice
     case externalResourcesSkipped
+    case linkedFilesLeftOut
     // Tools
     case locationRemoved
     case metadataRemoved
@@ -220,6 +226,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .heldTarArchive: "It held a TAR archive, so the result is that archive. Add “.tar” to its name if needed, then drop it on Ameya to unpack or convert it."
         case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
         case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
+        case .linkedFilesLeftOut: "Linked files outside the model were left out."
         case .locationRemoved: "Location information was removed."
         case .metadataRemoved: "Camera details, location and other hidden information were removed."
         case .resized: "The picture was made smaller."

@@ -190,7 +190,7 @@ enum Transcriber {
     /// Decodes the sound of any audio or video file to 16 kHz mono PCM, which every recogniser
     /// accepts and which keeps a one-hour file around 115 MB. Returns the duration in seconds.
     static func prepareAudio(from input: URL, to output: URL, progress: (Double) -> Void) async throws -> Double {
-        let asset = AVURLAsset(url: input)
+        let asset = try await SafeAsset.open(input)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
             throw ConversionError.noAudioTrack
         }

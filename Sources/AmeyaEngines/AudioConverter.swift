@@ -13,7 +13,7 @@ enum AudioConverter {
         output: URL,
         progress: (Double) -> Void
     ) async throws {
-        let asset = AVURLAsset(url: input)
+        let asset = try await SafeAsset.open(input)
         guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
             throw ConversionError.noAudioTrack
         }

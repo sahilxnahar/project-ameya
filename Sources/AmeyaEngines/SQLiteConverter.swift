@@ -1,5 +1,6 @@
 import AmeyaCore
 import Foundation
+import CSQLite
 import SQLite3
 
 /// Exports SQLite databases to CSV (the largest table), JSON (every table) and an SQL dump.
@@ -13,6 +14,10 @@ enum SQLiteConverter {
         /// Rows held in memory for CSV and JSON. The SQL dump streams, so it gets `maxDumpRows`.
         var maxRows = 1_000_000
         var maxDumpRows = 5_000_000
+        /// Largest single value (text or blob) SQLite may make, e.g. from a generated column.
+        var maxValueBytes: Int32 = 100_000_000
+        /// Reading stops after this long, so a database built to run forever can't.
+        var maxSeconds: Double = 600
     }
 
     struct Table {
@@ -25,7 +30,7 @@ enum SQLiteConverter {
                         limits: Limits = Limits(), progress: (Double) -> Void) throws -> [ConversionNote] {
         let size = Int64((try? FileManager.default.attributesOfItem(atPath: input.path)[.size] as? Int) ?? 0)
         guard size <= limits.maxFileBytes else { throw ConversionError.dataLimit("databases over 2 GB aren't supported") }
-        let database = try Database(url: input)
+        let database = try Database(url: input, limits: limits)
         let tables = try database.tables()
         guard !tables.isEmpty else { throw ConversionError.invalidData("the database has no tables") }
         progress(0.1)
@@ -80,8 +85,12 @@ enum SQLiteConverter {
 /// A read-only connection to one database file.
 final class Database {
     private var handle: OpaquePointer?
+    private let deadline: Date
+    private let limits: SQLiteConverter.Limits
 
-    init(url: URL) throws {
+    init(url: URL, limits: SQLiteConverter.Limits = SQLiteConverter.Limits()) throws {
+        self.limits = limits
+        deadline = Date().addingTimeInterval(limits.maxSeconds)
         var components = URLComponents()
         components.scheme = "file"
         components.path = url.path
@@ -93,7 +102,26 @@ final class Database {
             handle = nil
             throw ConversionError.invalidData("it isn't a readable SQLite database")
         }
-        // Extension loading stays off (the default), and `query` refuses any statement that writes.
+        // The file comes from anywhere, so its schema isn't trusted: views, triggers, defaults and
+        // generated columns may only use harmless functions, values are capped in size, nothing
+        // can be attached, and a progress check stops reading at the deadline. Extension loading
+        // stays off, and `query` refuses any statement that writes.
+        guard ameya_sqlite_harden(UnsafeMutableRawPointer(handle)) == 0 else {
+            sqlite3_close(handle)
+            handle = nil
+            throw ConversionError.invalidData("it couldn't be opened safely")
+        }
+        sqlite3_limit(handle, SQLITE_LIMIT_LENGTH, limits.maxValueBytes)
+        sqlite3_limit(handle, SQLITE_LIMIT_SQL_LENGTH, 10_000_000)
+        sqlite3_limit(handle, SQLITE_LIMIT_ATTACHED, 0)
+        sqlite3_limit(handle, SQLITE_LIMIT_EXPR_DEPTH, 1_000)
+        sqlite3_limit(handle, SQLITE_LIMIT_COMPOUND_SELECT, 500)
+        sqlite3_limit(handle, SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 10_000)
+        sqlite3_limit(handle, SQLITE_LIMIT_TRIGGER_DEPTH, 10)
+        sqlite3_progress_handler(handle, 10_000, { context in
+            guard let context else { return 1 }
+            return Date() > Unmanaged<Database>.fromOpaque(context).takeUnretainedValue().deadline ? 1 : 0
+        }, Unmanaged.passUnretained(self).toOpaque())
     }
 
     deinit { sqlite3_close(handle) }
@@ -169,6 +197,10 @@ final class Database {
             switch sqlite3_step(statement) {
             case SQLITE_ROW: try body(statement)
             case SQLITE_DONE: return
+            case SQLITE_INTERRUPT:
+                throw ConversionError.dataLimit("reading it took longer than \(Int(limits.maxSeconds / 60)) minutes")
+            case SQLITE_TOOBIG:
+                throw ConversionError.dataLimit("it holds a value larger than \(limits.maxValueBytes / 1_000_000) MB")
             default: throw ConversionError.invalidData(errorMessage)
             }
         }

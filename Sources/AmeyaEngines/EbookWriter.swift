@@ -25,11 +25,14 @@ enum EbookWriter {
     }
 
     static func write(_ data: Data, from source: FileFormat, to output: URL) throws -> [ConversionNote] {
-        let html: String = switch source {
+        let raw: String = switch source {
         case .md: try MarkdownRenderer.html(DocumentConverter.decodeText(data))
-        case .html: DocumentConverter.decodeText(data)
+        case .html: DocumentConverter.decodeHTML(data)
         default: String(decoding: try DocumentConverter.write(try DocumentConverter.read(data, as: source), as: .html), as: UTF8.self)
         }
+        // References to outside files and web addresses (in tags, style attributes and style
+        // sheets) never reach the book. Pictures that go are reported below as images dropped.
+        let html = HTMLSanitizer.sanitize(raw, forWebKit: false).html
         guard let document = try? XMLDocument(xmlString: html, options: [.documentTidyHTML, .nodeLoadExternalEntitiesNever]),
               let body = try document.nodes(forXPath: "//*[local-name()='body']").first as? XMLElement else {
             throw ConversionError.unreadable

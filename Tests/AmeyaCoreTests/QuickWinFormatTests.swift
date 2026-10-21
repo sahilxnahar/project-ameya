@@ -134,5 +134,30 @@ struct QuickWinFormatTests {
         #expect(FileFormat.gzipOriginalName(header(".hidden")) == "hidden")
         #expect(FileFormat.gzipOriginalName(header("")) == nil)
         #expect(FileFormat.gzipOriginalName(Data([0x1F, 0x8B, 8, 0, 0, 0, 0, 0, 0, 3, 1])) == nil)
+        // Names that would run when opened, or hide their real extension, aren't restored as given.
+        #expect(FileFormat.gzipOriginalName(header("Invoice.command")) == "Invoice.bin")
+        #expect(FileFormat.gzipOriginalName(header("Setup.terminal")) == "Setup.bin")
+        #expect(FileFormat.gzipOriginalName(header("photo\u{202E}gpj.app")) == nil) // UTF-8 bytes read as Latin-1: C1 controls
+        #expect(FileFormat.gzipOriginalName(header("tab\there.txt")) == nil)
+        #expect(FileFormat.gzipOriginalName(header(" . .notes.txt")) == "notes.txt")
+    }
+
+    @Test func restoredNamesAreSafe() {
+        #expect(FileFormat.restoredFileName("report.PDF") == "report.PDF")
+        #expect(FileFormat.restoredFileName("archive.tar") == "archive.tar")
+        #expect(FileFormat.restoredFileName("README") == "README")
+        #expect(FileFormat.restoredFileName("run.sh") == "run.bin")
+        #expect(FileFormat.restoredFileName("Weekly.webloc") == "Weekly.bin")
+        #expect(FileFormat.restoredFileName("invoice\u{202E}fdp.exe") == nil)
+        #expect(FileFormat.restoredFileName("a\u{2066}b.txt") == nil)
+        #expect(FileFormat.restoredFileName("bell\u{07}.txt") == nil)
+        #expect(FileFormat.restoredFileName("c1\u{85}.txt") == nil)
+        #expect(FileFormat.restoredFileName("a/b.txt") == nil)
+        #expect(FileFormat.restoredFileName("...") == nil)
+        #expect(FileFormat.restoredFileName("trailing.txt. ") == "trailing.txt")
+        let long = String(repeating: "é", count: 300) + ".jpg"
+        let restored = FileFormat.restoredFileName(long)
+        #expect(restored?.hasSuffix(".jpg") == true)
+        #expect((restored?.utf8.count ?? 999) <= FileFormat.maxRestoredNameBytes)
     }
 }

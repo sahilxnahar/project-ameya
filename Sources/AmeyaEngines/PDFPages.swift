@@ -19,6 +19,14 @@ enum PDFRasterizer {
         }
 
         let pageCount = min(document.numberOfPages, options.maxFrames)
+        // Every page is held until the output is written: check them all together first.
+        let budget = options.totalPixelBudget
+        var total = 0
+        for number in 1...pageCount {
+            guard let page = document.page(at: number), let (width, height, _) = renderSize(of: page, maxPixels: options.maxPixels) else { continue }
+            total += width * height
+            guard total <= budget else { throw ConversionError.tooLarge(pixels: total, limit: budget) }
+        }
         let frames = try (1...pageCount).map { number -> DecodedFrame in
             guard let page = document.page(at: number) else { throw ConversionError.unreadable }
             return try render(page, maxPixels: options.maxPixels)
@@ -27,19 +35,27 @@ enum PDFRasterizer {
     }
 
     /// One page as an opaque bitmap. Also used page by page for comics, to keep memory flat.
-    static func render(_ page: CGPDFPage, maxPixels: Int) throws -> DecodedFrame {
-        let box = page.getBoxRect(.cropBox)
-        let quarterTurns = ((page.rotationAngle % 360) + 360) % 360 / 90
-        let size = quarterTurns % 2 == 1 ? CGSize(width: box.height, height: box.width) : box.size
-        guard size.width >= 1, size.height >= 1 else { throw ConversionError.unreadable }
-
+    /// The bitmap size a page renders at, and the scale; nil for a page with no area.
+    static func renderSize(of page: CGPDFPage, maxPixels: Int) -> (width: Int, height: Int, scale: CGFloat)? {
+        let size = orientedSize(of: page)
+        guard size.width >= 1, size.height >= 1, size.width.isFinite, size.height.isFinite else { return nil }
         var scale = preferredScale
         let pixelsAtScale = Double(size.width * scale) * Double(size.height * scale)
         if pixelsAtScale > Double(maxPixels) {
             scale *= CGFloat((Double(maxPixels) / pixelsAtScale).squareRoot())
         }
-        let width = max(1, Int(size.width * scale))
-        let height = max(1, Int(size.height * scale))
+        return (max(1, Int(size.width * scale)), max(1, Int(size.height * scale)), scale)
+    }
+
+    private static func orientedSize(of page: CGPDFPage) -> CGSize {
+        let box = page.getBoxRect(.cropBox)
+        let quarterTurns = ((page.rotationAngle % 360) + 360) % 360 / 90
+        return quarterTurns % 2 == 1 ? CGSize(width: box.height, height: box.width) : box.size
+    }
+
+    static func render(_ page: CGPDFPage, maxPixels: Int) throws -> DecodedFrame {
+        let size = orientedSize(of: page)
+        guard let (width, height, scale) = renderSize(of: page, maxPixels: maxPixels) else { throw ConversionError.unreadable }
 
         guard let context = CGContext(
             data: nil,

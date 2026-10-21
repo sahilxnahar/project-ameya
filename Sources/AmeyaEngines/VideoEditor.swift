@@ -15,7 +15,7 @@ enum VideoEditor {
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> [ConversionNote] {
         guard let fileType = VideoConverter.fileType(for: target) else { throw ConversionError.unsupportedTarget(target) }
-        let asset = AVURLAsset(url: input)
+        let asset = try await SafeAsset.open(input)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else { throw ConversionError.noVideoTrack }
         let audioTrack = edits.mute ? nil : try await asset.loadTracks(withMediaType: .audio).first
         let assetDuration = try await asset.load(.duration)

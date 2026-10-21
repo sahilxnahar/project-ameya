@@ -34,6 +34,7 @@ enum ArchiveConverter {
         let compressedSize = Int64((try? FileManager.default.attributesOfItem(atPath: input.path)[.size] as? Int) ?? 1)
         var notes: Set<ConversionNote> = []
         var entries = 0
+        var links = LinkGuard()
         var total: Int64 = 0
         var buffer = [UInt8](repeating: 0, count: 256 * 1024)
         var entry: OpaquePointer?
@@ -59,8 +60,13 @@ enum ArchiveConverter {
             }
 
             let type = archive_entry_filetype(entry) & mode_t(AE_IFMT)
+            // Anything at or beneath a link already written would be extracted through it.
+            guard !links.passesThroughLink(path) else {
+                notes.insert(.unsafeEntriesSkipped)
+                continue
+            }
             if type == mode_t(AE_IFLNK) {
-                guard let target = string(archive_entry_symlink(entry)), linkStaysInside(target, from: path) else {
+                guard let target = string(archive_entry_symlink(entry)), links.allows(target, at: path) else {
                     notes.insert(.specialFilesSkipped)
                     continue
                 }
@@ -73,7 +79,7 @@ enum ArchiveConverter {
             defer { archive_entry_free(copy) }
             archive_entry_set_pathname_utf8(copy, path)
             if let hardlink = string(archive_entry_hardlink(entry)) {
-                guard let safeLink = safePath(hardlink) else {
+                guard let safeLink = safePath(hardlink), !links.passesThroughLink(safeLink) else {
                     notes.insert(.unsafeEntriesSkipped)
                     continue
                 }
@@ -81,6 +87,10 @@ enum ArchiveConverter {
             }
             guard archive_write_header(writer, copy) >= ARCHIVE_WARN else {
                 throw ConversionError.mediaFailed(errorMessage(writer) ?? "couldn't write an entry")
+            }
+            links.record(path, isLink: type == mode_t(AE_IFLNK))
+            if type == mode_t(AE_IFLNK), let target = string(archive_entry_symlink(entry)) {
+                links.recordTarget(target, at: path)
             }
 
             if type == mode_t(AE_IFREG) {
@@ -146,6 +156,71 @@ enum ArchiveConverter {
         // Absolute paths are rejected rather than silently made relative.
         guard !components.isEmpty, !raw.hasPrefix("/") else { return nil }
         return components.joined(separator: "/") + (isDirectory ? "/" : "")
+    }
+
+    /// Tracks the symbolic links written so far, because a lexical check of each link alone isn't
+    /// enough: with `d/up -> ..` written, `d/up/x -> ..` looks harmless but lands outside, and a
+    /// file at `d/up/f` would be extracted through the link. So nothing is written at or beneath
+    /// a link, no link target may pass through one, and a path already used as a directory
+    /// can't later become a link. Paths are compared case- and normalization-insensitively, as
+    /// macOS file systems usually treat them.
+    struct LinkGuard {
+        private var links: Set<String> = []
+        private var directories: Set<String> = []
+
+        static func key<Components: Sequence>(_ components: Components) -> String where Components.Element == Substring {
+            components.joined(separator: "/").precomposedStringWithCanonicalMapping.lowercased()
+        }
+
+        /// Whether `path`, or any directory above it, is a link written earlier.
+        func passesThroughLink(_ path: String) -> Bool {
+            let components = path.split(separator: "/")
+            return components.indices.contains { links.contains(Self.key(components[...$0])) }
+        }
+
+        /// Whether a link at `path` pointing at `target` may be written.
+        func allows(_ target: String, at path: String) -> Bool {
+            let components = path.split(separator: "/")
+            guard !target.hasPrefix("/"), !directories.contains(Self.key(components)) else { return false }
+            var resolved = Array(components.dropLast())
+            for component in target.split(separator: "/") {
+                switch component {
+                case ".": continue
+                case "..":
+                    guard !resolved.isEmpty else { return false }
+                    resolved.removeLast()
+                default:
+                    resolved.append(component)
+                    if links.contains(Self.key(resolved)) { return false }
+                }
+            }
+            return true
+        }
+
+        /// Notes a written entry: its parent directories, and the link itself if it is one.
+        mutating func record(_ path: String, isLink: Bool) {
+            let components = path.split(separator: "/")
+            for end in components.indices.dropLast() { directories.insert(Self.key(components[...end])) }
+            if isLink {
+                links.insert(Self.key(components))
+            } else if path.hasSuffix("/") {
+                directories.insert(Self.key(components))
+            }
+        }
+
+        /// Marks the directories a link's target walks through, so none of them can become a link later.
+        mutating func recordTarget(_ target: String, at path: String) {
+            var resolved = Array(path.split(separator: "/").dropLast())
+            for component in target.split(separator: "/").dropLast() {
+                switch component {
+                case ".": continue
+                case "..": if !resolved.isEmpty { resolved.removeLast() }
+                default:
+                    resolved.append(component)
+                    directories.insert(Self.key(resolved))
+                }
+            }
+        }
     }
 
     /// Whether a symbolic link target resolves to somewhere inside the archive.

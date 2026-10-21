@@ -22,7 +22,7 @@ enum VideoConverter {
     // MARK: Video → video
 
     static func transcode(input: URL, to target: FileFormat, output: URL, progress: @escaping @Sendable (Double) -> Void) async throws {
-        let asset = AVURLAsset(url: input)
+        let asset = try await SafeAsset.open(input)
         guard try await !asset.loadTracks(withMediaType: .video).isEmpty else { throw ConversionError.noVideoTrack }
         guard let fileType = fileType(for: target),
               let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
@@ -52,7 +52,7 @@ enum VideoConverter {
     // MARK: Video → GIF
 
     static func toGIF(input: URL, progress: (Double) -> Void) async throws -> (Data, [ConversionNote]) {
-        let asset = AVURLAsset(url: input)
+        let asset = try await SafeAsset.open(input)
         guard try await !asset.loadTracks(withMediaType: .video).isEmpty else { throw ConversionError.noVideoTrack }
         let duration = try await asset.load(.duration).seconds
         let length = min(duration, gifMaxSeconds)

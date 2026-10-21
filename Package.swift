@@ -21,8 +21,10 @@ let package = Package(
                 .define("NDEBUG"),
             ]
         ),
+        // Hardening for the system SQLite: `sqlite3_db_config` is variadic, which Swift can't call.
+        .target(name: "CSQLite", linkerSettings: [.linkedLibrary("sqlite3")]),
         // Conversion engines. Linked only into the worker process.
-        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore", "CArchive", "CWebP"],
+        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore", "CArchive", "CWebP", "CSQLite"],
                 linkerSettings: [.linkedLibrary("sqlite3")]),
         // One short-lived, sandboxed process per job. Reads stdin, writes stdout.
         .executableTarget(name: "AmeyaWorker", dependencies: ["AmeyaCore", "AmeyaEngines"]),

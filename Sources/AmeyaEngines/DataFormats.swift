@@ -4,9 +4,12 @@ import Foundation
 /// Property lists (XML, binary and old-style text in; XML out) through PropertyListSerialization.
 enum PropertyListData {
     static let maxDepth = 512
+    /// Binary property lists can point many times at one shared array or dictionary, so a
+    /// small file can stand for a huge tree once expanded. Values are counted as they're copied.
+    static let maxNodes = 5_000_000
 
     /// Returns the tree, and whether dates or binary data had to be turned into text.
-    static func read(_ data: Data) throws -> (DataValue, simplified: Bool) {
+    static func read(_ data: Data, maxNodes: Int = maxNodes) throws -> (DataValue, simplified: Bool) {
         let plist: Any
         do {
             plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
@@ -14,19 +17,22 @@ enum PropertyListData {
             throw ConversionError.invalidData("it isn't a valid property list")
         }
         var simplified = false
-        let value = try convert(plist, depth: 0, simplified: &simplified)
+        var budget = maxNodes
+        let value = try convert(plist, depth: 0, budget: &budget, simplified: &simplified)
         return (value, simplified)
     }
 
-    private static func convert(_ object: Any, depth: Int, simplified: inout Bool) throws -> DataValue {
+    private static func convert(_ object: Any, depth: Int, budget: inout Int, simplified: inout Bool) throws -> DataValue {
         guard depth <= maxDepth else { throw ConversionError.dataLimit("it is nested more than \(maxDepth) levels deep") }
+        budget -= 1
+        guard budget >= 0 else { throw ConversionError.dataLimit("it expands to more than \(maxNodes.formatted()) values") }
         switch object {
         case let dictionary as [String: Any]:
             return .object(try dictionary.keys.sorted().map {
-                DataValue.Field(key: $0, value: try convert(dictionary[$0]!, depth: depth + 1, simplified: &simplified))
+                DataValue.Field(key: $0, value: try convert(dictionary[$0]!, depth: depth + 1, budget: &budget, simplified: &simplified))
             })
         case let array as [Any]:
-            return .array(try array.map { try convert($0, depth: depth + 1, simplified: &simplified) })
+            return .array(try array.map { try convert($0, depth: depth + 1, budget: &budget, simplified: &simplified) })
         case let string as String:
             return .string(string)
         case let number as NSNumber:
