@@ -138,7 +138,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Password-encrypt a file (opens on other platforms) | P1 | ⬜ |
 | Send to phone over Wi-Fi via QR code (local, expiring) | P1 | ⬜ |
 | AirDrop, iCloud Drive / Dropbox folder save | P1 | ⬜ |
-| QR code create and read | P1 | ⬜ |
+| QR code create and read | P1 | ✅ |
 | Sort into folders by date/place, find largest files, duplicate cleanup | P2 | ⬜ |
 | Base64, split/join large files, check an app's code signature | P2 | ⬜ |
 
@@ -198,6 +198,10 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
 | E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
 | Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
+| QR codes | Text → QR code PNG; any image or screenshot → TXT of every QR code and barcode found | Core Image + Vision, on-device. High error correction, 4-module quiet zone; over 1,273 bytes refused |
+| Contacts | vCard 2.1/3.0/4.0 → CSV, JSON; CSV → vCard 3.0 | Own parser (quoted-printable, charsets, folding). Name, organisation, emails, phones, addresses, birthday, note |
+| GPS tracks | GPX, KML, GeoJSON ↔ each other; KMZ in; any of them → CSV (lat, lon, ele, time, name) | Waypoints, routes and tracks; elevation and times kept (KML via gx:Track) |
+| Text encoding | TXT, CSV, SRT, WebVTT, Markdown, vCard in any encoding → UTF-8 (same format, `TextEdits` option) | Detects BOMs, UTF-16 without BOM, Windows-1252, Shift-JIS, GBK/GB18030, Big5, EUC-KR, KOI8-R, Windows-1251, ISO-8859-x; LF line endings |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 

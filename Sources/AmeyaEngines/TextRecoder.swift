@@ -83,7 +83,8 @@ enum TextRecoder {
         )
         var encoding = String.Encoding(rawValue: detected)
         var text = converted as String?
-        if text == nil || cyrillic.contains(encoding) {
+        let latin: [String.Encoding] = [.windowsCP1252, .isoLatin1, .isoLatin2, .windowsCP1250, cf(.isoLatin9), cf(.isoLatin5), .windowsCP1254]
+        if text == nil || cyrillic.contains(encoding) || (latin.contains(encoding) && wordsAreWhollyNonASCII(bytes)) {
             if let best = bestCyrillic(data) { (encoding, text) = (best.0, best.1) }
         }
         if let text {
@@ -153,6 +154,22 @@ enum TextRecoder {
         return nil
     }
 
+    /// True when most words containing non-ASCII bytes are made only of them, as in Cyrillic
+    /// text. Accented Latin text mixes them into ASCII words ("café"), so it returns false.
+    private static func wordsAreWhollyNonASCII(_ bytes: [UInt8]) -> Bool {
+        var whole = 0, mixed = 0
+        var high = 0, low = 0
+        func endWord() {
+            if high >= 2 && low == 0 { whole += 1 } else if high > 0 { mixed += 1 }
+            (high, low) = (0, 0)
+        }
+        for byte in bytes {
+            if byte >= 0x80 { high += 1 } else if (0x41...0x5A).contains(byte) || (0x61...0x7A).contains(byte) { low += 1 } else { endWord() }
+        }
+        endWord()
+        return whole > mixed
+    }
+
     /// Among the Cyrillic single-byte encodings, the one whose letters are mostly lower case.
     private static func bestCyrillic(_ data: Data) -> (String.Encoding, String)? {
         var best: (String.Encoding, String, Int)?
@@ -160,7 +177,12 @@ enum TextRecoder {
             guard let text = String(data: data, encoding: encoding) else { continue }
             var score = 0
             for scalar in text.unicodeScalars where (0x0400...0x04FF).contains(scalar.value) {
-                score += scalar.properties.isLowercase ? 1 : -1
+                switch scalar.value {
+                case 0x0430...0x044F: score += 1 // а…я
+                case 0x0410...0x042F: score -= 1 // А…Я: prose is mostly lower case
+                case 0x0401, 0x0451: break // Ё ё
+                default: score -= 3 // letters rare outside Serbian, Macedonian and Ukrainian
+                }
             }
             if best == nil || score > best!.2 { best = (encoding, text, score) }
         }

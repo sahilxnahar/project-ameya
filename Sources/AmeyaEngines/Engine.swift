@@ -15,7 +15,7 @@ public enum Engine {
     ) async throws -> (output: URL, result: ConversionResult) {
         guard let source = request.source ?? FileFormat.detect(at: input) else { throw ConversionError.unreadable }
         let target = request.target
-        guard ConversionMatrix.canConvert(from: source, to: target) else {
+        guard ConversionMatrix.canConvert(from: source, to: target) || ConversionMatrix.canEdit(source, options: request.options) else {
             throw ConversionError.unsupportedConversion(from: source, to: target)
         }
         let output = scratch.appendingPathComponent("output.\(target.preferredExtension)")
@@ -23,6 +23,9 @@ public enum Engine {
         var frames = 1
 
         switch (source.family, target.family) {
+        case _ where EverydayConverter.handles(source, target, options: request.options):
+            notes = try EverydayConverter.convert(input: input, from: source, request: request, output: output, progress: progress)
+
         case _ where source.isBookOrComic || target.isBookOrComic:
             (notes, frames) = try BookConverter.convert(input: input, from: source, to: target, output: output,
                                                         options: request.options, progress: progress)

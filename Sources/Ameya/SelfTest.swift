@@ -24,7 +24,7 @@ enum SelfTest {
             let originalPNG = try makeTransparentPNG()
             try originalPNG.write(to: png)
             let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
-            for target in matrix.targets(for: .png) {
+            for target in matrix.targets(for: .png) where target != .txt { // PNG → text reads QR codes; tested below
                 await check.convert(png, from: .png, to: target)
             }
 
@@ -67,6 +67,34 @@ enum SelfTest {
             }
             await check.convert(csv, from: .csv, to: .xlsx)
 
+            // Everyday formats: QR codes (Core Image, Vision), text encoding, contacts, GPS tracks.
+            let message = "https://example.com/ameya?q=ünïcødé"
+            let qrText = directory.appendingPathComponent("link.txt")
+            try Data(message.utf8).write(to: qrText)
+            if let qr = await check.convert(qrText, from: .txt, to: .png),
+               let decoded = await check.convert(qr, from: .png, to: .txt) {
+                let matches = (try? String(contentsOf: decoded, encoding: .utf8)) == message + "\n"
+                print("\(matches ? "PASS" : "FAIL") QR code decodes to the original text")
+                check.allPassed = check.allPassed && matches
+            }
+            let legacy = directory.appendingPathComponent("legacy.txt")
+            try "Résumé, naïve café\r\n".data(using: .windowsCP1252)!.write(to: legacy)
+            await check.convert(legacy, from: .txt, to: .txt, options: ConversionOptions(text: TextEdits()))
+            let vcf = directory.appendingPathComponent("people.vcf")
+            try Data("BEGIN:VCARD\r\nVERSION:3.0\r\nN:Müller;José;;;\r\nTEL:+1 555\r\nNOTE:hi\r\nEND:VCARD\r\n".utf8).write(to: vcf)
+            if let contactsCSV = await check.convert(vcf, from: .vcf, to: .csv) {
+                await check.convert(contactsCSV, from: .csv, to: .vcf)
+            }
+            let gpx = directory.appendingPathComponent("ride.gpx")
+            try Data("""
+            <?xml version="1.0"?><gpx version="1.1" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Ride</name><trkseg>
+            <trkpt lat="47.6" lon="-122.3"><ele>12</ele><time>2024-05-01T08:00:00Z</time></trkpt>
+            <trkpt lat="47.61" lon="-122.31"><ele>13</ele><time>2024-05-01T08:00:05Z</time></trkpt></trkseg></trk></gpx>
+            """.utf8).write(to: gpx)
+            if let kml = await check.convert(gpx, from: .gpx, to: .kml) {
+                await check.convert(kml, from: .kml, to: .geojson)
+            }
+
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
             let passed = check.allPassed && unchanged
@@ -85,13 +113,14 @@ enum SelfTest {
 
         /// Converts and verifies the output's format by its contents. Returns the output on success.
         @discardableResult
-        mutating func convert(_ input: URL, from source: FileFormat, to target: FileFormat) async -> URL? {
+        mutating func convert(_ input: URL, from source: FileFormat, to target: FileFormat,
+                              options: ConversionOptions = ConversionOptions()) async -> URL? {
             let destination = OutputPlanner.destination(for: input, target: target, in: directory)
             let label = "\(source.rawValue) -> \(target.rawValue)"
             do {
                 let result = try await runner.run(
                     input: input, destination: destination,
-                    request: ConversionRequest(source: source, target: target)
+                    request: ConversionRequest(source: source, target: target, options: options)
                 )
                 // XLSX is a ZIP package Ameya writes but never reads back, so check it as a ZIP.
                 let expected = target == .alac ? FileFormat.m4a : target == .xlsx ? .zip : target
