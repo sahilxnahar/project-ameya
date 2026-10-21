@@ -17,6 +17,9 @@ public enum Engine {
         scratch: URL,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> (outputs: [URL], result: ConversionResult) {
+        if let task = request.options.task { // privacy check, cleaning, photo details, checksums (FileTasks.swift)
+            return try await FileTasks.run(task, inputs: inputs, request: request, scratch: scratch, progress: progress)
+        }
         if let passport = request.options.passport {
             guard inputs.count == 1 else { throw ConversionError.invalidData("passport photos take one photo at a time") }
             return try PassportPhoto.run(passport, input: inputs[0], request: request, scratch: scratch, progress: progress)

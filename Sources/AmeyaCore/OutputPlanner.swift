@@ -113,6 +113,10 @@ public enum OutputPlanner {
             let stem = ext.isEmpty ? inner : (inner as NSString).deletingPathExtension
             return stem.isEmpty ? ("Decompressed", ext) : (stem, ext)
         }
+        if target == .other {
+            // "The same kind of file": tools that keep a format Ameya doesn't name (e.g. cleaning an XLSX).
+            return (baseName(of: source), source.pathExtension)
+        }
         return (baseName(of: source), target.preferredExtension)
     }
 }

@@ -30,9 +30,11 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var passport: PassportPhotoOptions?
     /// Set by `WorkerSecret`: the PDF password follows on stdin, ahead of the file.
     public var secretOnStdin: Bool? = nil
+    /// Privacy check, hidden-detail removal, photo details or checksum (see Privacy.swift). Set after `init`.
+    public var task: FileTask? = nil
 
     public var hasEdits: Bool {
-        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil || passport != nil
+        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil || passport != nil || task != nil
     }
 
     public static let defaultMaxPixels = 100_000_000
@@ -175,6 +177,14 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case textRecognisedFromScans
     case textRecognisedInPicture
     case keepPasswordSafe
+    // Privacy check and photo details
+    case hiddenDetailsRemoved
+    case trackedChangesKept
+    case commentsKept
+    case pdfContentKept
+    case pdfBookmarksDropped
+    case photoDetailsUpdated
+    case photoDetailsReencoded
 
     public var message: String {
         switch self {
@@ -241,6 +251,13 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .textRecognisedFromScans: "Text was recognised from scanned pages; check names and numbers."
         case .textRecognisedInPicture: "The text was recognised on this Mac; check names and numbers."
         case .keepPasswordSafe: "Keep the password somewhere safe: Ameya can't recover a forgotten one."
+        case .hiddenDetailsRemoved: "Names, dates, device and other hidden details were removed."
+        case .trackedChangesKept: "Tracked changes are still in the document. Accept or reject them in your word processor to remove them."
+        case .commentsKept: "Comments are still in the file. Delete them in the app that made it if you don't want to share them."
+        case .pdfContentKept: "Comments, form answers and attached files are part of the PDF, so they were kept; the names of who wrote comments were removed."
+        case .pdfBookmarksDropped: "The sidebar bookmarks were left out of the copy."
+        case .photoDetailsUpdated: "The details were changed without re-saving the picture, so its quality is unchanged."
+        case .photoDetailsReencoded: "This kind of picture had to be re-saved to change its details."
         }
     }
 }
