@@ -11,6 +11,13 @@ enum ImageEditor {
         var notes: [ConversionNote] = []
         let quarterTurns = try normalizedQuarterTurns(edits.rotation)
         var resized = false
+        // Only claim to have removed what was there to begin with.
+        let hadLocation = frames.contains { Self.hasContent($0.metadata[kCGImagePropertyGPSDictionary]) }
+        let hadMetadata = frames.contains { frame in
+            [kCGImagePropertyExifDictionary, kCGImagePropertyGPSDictionary,
+             kCGImagePropertyIPTCDictionary, kCGImagePropertyTIFFDictionary]
+                .contains { Self.hasContent(frame.metadata[$0]) }
+        }
         frames = try frames.map { frame in
             var frame = frame
             var image = frame.image
@@ -32,10 +39,23 @@ enum ImageEditor {
         if resized { notes.append(.resized) }
         switch edits.metadata {
         case .keep: break
-        case .removeLocation: notes.append(.locationRemoved)
-        case .removeAll: notes.append(.metadataRemoved)
+        case .removeLocation: if hadLocation { notes.append(.locationRemoved) }
+        case .removeAll: if hadMetadata { notes.append(.metadataRemoved) }
         }
         return notes
+    }
+
+    /// Keys encoders add to every file; they describe the pixels, not the photo, so removing them isn't news.
+    private static var structuralKeys: Set<CFString> { [
+        kCGImagePropertyExifPixelXDimension, kCGImagePropertyExifPixelYDimension, kCGImagePropertyExifColorSpace,
+        kCGImagePropertyExifVersion, kCGImagePropertyExifComponentsConfiguration, kCGImagePropertyExifFlashPixVersion,
+        kCGImagePropertyTIFFOrientation, kCGImagePropertyTIFFXResolution, kCGImagePropertyTIFFYResolution,
+        kCGImagePropertyTIFFResolutionUnit,
+    ] }
+
+    private static func hasContent(_ value: Any?) -> Bool {
+        guard let dictionary = value as? [CFString: Any] else { return false }
+        return dictionary.keys.contains { !structuralKeys.contains($0) }
     }
 
     static func normalizedQuarterTurns(_ degrees: Int) throws -> Int {

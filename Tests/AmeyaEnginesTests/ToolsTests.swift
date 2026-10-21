@@ -199,6 +199,34 @@ struct ImageEditorTests {
         #expect(none.notes.contains(.metadataRemoved))
     }
 
+    @Test func locationAndMetadataNotesAreOnlyReportedWhenThereWasSomethingToRemove() throws {
+        let plain = try Self.encodeJPEG(properties: [:])
+        let (_, noLocation, _) = try convert(plain, from: .jpeg, to: .jpeg, ImageEdits(metadata: .removeLocation))
+        #expect(!noLocation.notes.contains(.locationRemoved), "\(noLocation.notes)")
+        let (_, noMetadata, _) = try convert(plain, from: .jpeg, to: .jpeg, ImageEdits(metadata: .removeAll))
+        #expect(!noMetadata.notes.contains(.metadataRemoved), "\(noMetadata.notes)")
+
+        // Camera details but no GPS: removing location has nothing to do, removing everything does.
+        let noGPS = try Self.encodeJPEG(properties: [kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFMake: "Acme"]])
+        let (_, stillNoLocation, _) = try convert(noGPS, from: .jpeg, to: .jpeg, ImageEdits(metadata: .removeLocation))
+        #expect(!stillNoLocation.notes.contains(.locationRemoved))
+        let (_, cleaned, _) = try convert(noGPS, from: .jpeg, to: .jpeg, ImageEdits(metadata: .removeAll))
+        #expect(cleaned.notes.contains(.metadataRemoved))
+
+        let withGPS = try photoWithLocation()
+        let (_, removed, data) = try convert(withGPS, from: .jpeg, to: .jpeg, ImageEdits(metadata: .removeLocation))
+        #expect(removed.notes.contains(.locationRemoved))
+        #expect(properties(data)[kCGImagePropertyGPSDictionary] == nil)
+    }
+
+    private static func encodeJPEG(properties: [CFString: Any]) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, FileFormat.jpeg.typeIdentifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, twoTone(), properties as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
     @Test func meetsAByteTargetForJPEG() throws {
         let noisy = try Fixtures.encode([Self.noise(width: 800, height: 600)], as: .png)
         let target = 40_000

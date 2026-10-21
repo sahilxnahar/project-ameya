@@ -128,7 +128,7 @@ enum VideoConverter {
             throw ConversionError.mediaFailed(writer.error?.localizedDescription ?? "the video couldn't be written")
         }
         progress(1)
-        return decoded.frames.contains(where: { $0.image.hasAlpha }) ? [.transparencyFilledWhite] : []
+        return decoded.frames.contains(where: { $0.image.hasTransparentPixels }) ? [.transparencyFilledWhite] : []
     }
 
     private static func makePixelBuffer(from image: CGImage, pool: CVPixelBufferPool, width: Int, height: Int) throws -> CVPixelBuffer? {

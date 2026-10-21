@@ -41,6 +41,28 @@ struct ImageConverterTests {
         #expect(red > 240 && green > 240 && blue > 240)
     }
 
+    @Test func opaquePNGWithAlphaChannelGetsNoTransparencyNote() throws {
+        // Fixtures.frames are drawn into an RGBA context, so the PNG carries an alpha channel that is fully opaque.
+        let source = try Fixtures.encode([Fixtures.frames(2)[1]], as: .png)
+        let (output, result) = try ImageConverter.convert(source, request: ConversionRequest(target: .jpeg))
+        #expect(!result.notes.contains(.transparencyFilledWhite), "\(result.notes)")
+        #expect(Fixtures.decode(output)?.count == 1)
+    }
+
+    @Test func halfTransparentPNGGetsNoteAndWhiteBackground() throws {
+        let source = try Fixtures.encode([Fixtures.halfTransparent()], as: .png)
+        let (output, result) = try ImageConverter.convert(source, request: ConversionRequest(target: .jpeg))
+        #expect(result.notes.contains(.transparencyFilledWhite))
+        let image = try #require(Fixtures.decode(output)?.first)
+        let (red, green, blue) = try #require(Fixtures.pixel(of: image, x: 5, y: 24))
+        #expect(red > 240 && green > 240 && blue > 240)
+    }
+
+    @Test func transparencyScanSeesOnlyRealTransparency() {
+        #expect(Fixtures.frames(2)[0].hasTransparentPixels == false)
+        #expect(Fixtures.halfTransparent().hasTransparentPixels)
+    }
+
     @Test func animationSurvivesWhereSupported() throws {
         let gif = try Fixtures.encode(Fixtures.frames(3), as: .gif, delay: 0.2)
 
