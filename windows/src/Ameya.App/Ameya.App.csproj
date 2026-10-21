@@ -16,7 +16,7 @@
     <RuntimeIdentifier Condition="'$(Platform)' != 'ARM64'">win-x64</RuntimeIdentifier>
     <UseWinUI>true</UseWinUI>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <!-- Program.cs has its own Main, so --self-test runs before any XAML starts. -->
+    <!-- Program.cs has its own Main, so the self-test option runs before any XAML starts. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <SelfContained Condition="'$(AmeyaSelfContained)' == 'true'">true</SelfContained>
     <!-- CI signs the package with a throwaway certificate; no key is ever committed. -->

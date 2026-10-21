@@ -82,16 +82,30 @@ public class ImageConversionTests
         var input = folder.File("anim.gif", await Encode(BitmapEncoder.GifEncoderId, 3, 24, 16));
         Assert.Equal(3, (await FrameSizes(input)).Count);
 
-        var (gif, gifResult) = await Convert(folder, input, "gif");
-        Assert.Equal(3, (await FrameSizes(gif)).Count);
-        Assert.Equal(3, gifResult.Frames);
-
         var (_, png) = await Convert(folder, input, "png");
         Assert.Equal(new[] { NoteIds.OnlyFirstFrameKept }, png.Notes);
 
         var (tiff, tiffResult) = await Convert(folder, input, "tiff");
         Assert.Contains(NoteIds.AnimationBecamePages, tiffResult.Notes);
         Assert.Equal(3, (await FrameSizes(tiff)).Count);
+    }
+
+    [Fact]
+    public async Task AnimatedGifsAreWrittenWithTheirTimingAndLoop()
+    {
+        // GIF to GIF isn't a conversion, so the writer (used by animation tools later) is tested directly.
+        var frames = Enumerable.Range(0, 3).Select(i =>
+            new Ameya.Engines.Images.ImageFrame(24, 16, Enumerable.Repeat((byte)(i * 90), 24 * 16 * 4).ToArray(), 96, 96, 20 + i)).ToList();
+        using var memory = new InMemoryRandomAccessStream();
+        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.GifEncoderId, memory);
+        await Ameya.Engines.Images.GifAnimation.WriteAsync(encoder, frames, loopCount: 0);
+        await encoder.FlushAsync();
+        memory.Seek(0);
+        var decoder = await BitmapDecoder.CreateAsync(memory);
+        var decoded = await Ameya.Engines.Images.GifAnimation.DecodeAsync(decoder, (int)decoder.FrameCount, new ConversionOptions(), long.MaxValue);
+        Assert.Equal(3, decoded.Count);
+        Assert.Equal(new[] { 20, 21, 22 }, decoded.Select(f => f.DelayCentiseconds));
+        Assert.Equal(0, await Ameya.Engines.Images.GifAnimation.LoopCountAsync(decoder));
     }
 
     [Fact]
