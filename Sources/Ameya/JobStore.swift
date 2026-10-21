@@ -198,14 +198,20 @@ final class JobStore: ObservableObject {
             let first = files[0]
             var request = tool.makeRequest(first.format)
             if let options { request.options = options }
-            if files.count > 1 { request.inputs = files.map(\.format) }
+            if let target = tool.targetForOptions?(request.options) { request.target = target }
+            var sources = files.map(\.url), formats = files.map(\.format)
+            if let extra = tool.extraInputs?(request.options) { // e.g. a watermark's logo
+                sources += extra.map(\.url)
+                formats += extra.map(\.format)
+            }
+            if sources.count > 1 { request.inputs = formats }
             let suffix = tool.outputSuffix(for: request.options)
             let isFolder = tool.producesFolder(for: request.options)
             let destination = isFolder
                 ? OutputPlanner.folderDestination(for: first.url, suffix: suffix, in: outputDirectory, isTaken: isTaken)
                 : OutputPlanner.destination(for: first.url, target: request.target, in: outputDirectory,
                                             suffix: suffix, isTaken: isTaken)
-            enqueue(Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
+            enqueue(Job(sources: sources, sourceFormats: formats, destination: destination,
                         isFolder: isFolder, request: request, toolTitle: tool.title))
         }
         pending = []

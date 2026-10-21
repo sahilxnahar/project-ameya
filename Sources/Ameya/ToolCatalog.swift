@@ -41,6 +41,10 @@ struct Tool: Identifiable {
     /// in "photo (India passport).jpg").
     var suffixForOptions: ((ConversionOptions) -> String)?
     var folderForOptions: ((ConversionOptions) -> Bool)?
+    /// Extra files sent after each job's own file, e.g. the logo for "Watermark…" (multi-input TAR).
+    var extraInputs: (@MainActor (ConversionOptions) -> [(url: URL, format: FileFormat)])?
+    /// When set, the panel's options pick the output format (e.g. PNG or HEIC for a cut-out).
+    var targetForOptions: ((ConversionOptions) -> FileFormat?)?
 
     func outputSuffix(for options: ConversionOptions) -> String { suffixForOptions?(options) ?? outputSuffix }
     func producesFolder(for options: ConversionOptions) -> Bool { folderForOptions?(options) ?? producesFolder }
@@ -72,6 +76,7 @@ struct ToolCatalog {
     init(writable: Set<FileFormat>) {
         tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
             + Self.sizePresetTools(writable: writable) + Self.pdfToolbox() // SizePresets.swift, PDFToolbox
+            + Self.photoTools(writable: writable) // PhotoToolCatalog.swift
     }
 
     /// Tools offered for these files, in catalog order.

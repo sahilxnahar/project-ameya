@@ -79,10 +79,13 @@ public struct BackgroundRemoval: Codable, Sendable, Equatable {
     public var subjects: Subjects
     /// A white outline and a soft shadow, like a sticker.
     public var sticker: Bool
+    /// The format the person picked (PNG, HEIC or WebP); the app turns it into the request's target.
+    public var format: FileFormat?
 
-    public init(subjects: Subjects = .all, sticker: Bool = false) {
+    public init(subjects: Subjects = .all, sticker: Bool = false, format: FileFormat? = nil) {
         self.subjects = subjects
         self.sticker = sticker
+        self.format = format
     }
 }
 
