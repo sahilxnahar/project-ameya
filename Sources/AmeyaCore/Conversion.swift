@@ -30,9 +30,11 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var passport: PassportPhotoOptions?
     /// Set by `WorkerSecret`: the PDF password follows on stdin, ahead of the file.
     public var secretOnStdin: Bool? = nil
+    /// Audio and video tools (see MediaTools.swift). Set after `init`.
+    public var media: MediaTool? = nil
 
     public var hasEdits: Bool {
-        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil || passport != nil
+        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil || passport != nil || media != nil
     }
 
     public static let defaultMaxPixels = 100_000_000
@@ -175,6 +177,23 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case textRecognisedFromScans
     case textRecognisedInPicture
     case keepPasswordSafe
+    // Audio and video tools (MediaTools.swift)
+    case volumeEvened
+    case fadedInOut
+    case soundTrimmed
+    case speedChanged
+    case mixedToMono
+    case channelsSwapped
+    case oneSideKept
+    case joinedInOrder
+    case videosLetterboxed
+    case chaptersAdded
+    case coverAdded
+    case ringtoneHowTo
+    case ringtoneShorter
+    case gifFittedToSize
+    case framesLimited
+    case captionsBurnedIn
 
     public var message: String {
         switch self {
@@ -241,6 +260,22 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .textRecognisedFromScans: "Text was recognised from scanned pages; check names and numbers."
         case .textRecognisedInPicture: "The text was recognised on this Mac; check names and numbers."
         case .keepPasswordSafe: "Keep the password somewhere safe: Ameya can't recover a forgotten one."
+        case .volumeEvened: "The volume was set to the chosen level; the loudest moments were gently held back so nothing distorts."
+        case .fadedInOut: "The sound now fades in and out."
+        case .soundTrimmed: "The sound was trimmed to the chosen start and end."
+        case .speedChanged: "The speed was changed; voices and music keep their pitch."
+        case .mixedToMono: "Left and right were mixed into one channel (mono)."
+        case .channelsSwapped: "Left and right were swapped."
+        case .oneSideKept: "Only one side was kept, as one channel (mono)."
+        case .joinedInOrder: "The files were joined one after another, in the order shown."
+        case .videosLetterboxed: "Videos of a different shape were fitted inside the first one's frame, with black bars."
+        case .chaptersAdded: "Each file became a chapter named after it."
+        case .coverAdded: "The picture became the cover."
+        case .ringtoneHowTo: "To use it, connect your iPhone, drag the ringtone onto it in Finder, then pick it in Settings > Sounds."
+        case .ringtoneShorter: "The sound ends sooner, so the ringtone is shorter."
+        case .gifFittedToSize: "To fit the size, the GIF has a smaller picture, fewer frames per second or fewer colours."
+        case .framesLimited: "Only the first 1,000 pictures were saved; choose a longer gap to cover the whole video."
+        case .captionsBurnedIn: "The captions are now part of the picture and can't be turned off."
         }
     }
 }
