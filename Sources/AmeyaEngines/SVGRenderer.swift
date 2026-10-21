@@ -8,7 +8,7 @@ import Foundation
 ///
 /// Why this route: it ships with macOS, needs no UI, network or WebKit process, and runs
 /// inside the sandboxed worker (proved by the bundle self-test). Drawing it into a PDF
-/// context keeps shapes and text as vectors. WebKit was not used because a WKWebView needs a
+/// context keeps shapes and text as vectors. WebKit was not used because a WebKit web view needs a
 /// window server connection and helper processes that the sandboxed CLI worker should not have.
 enum SVGRenderer {
     /// Largest SVG accepted, before and after gzip decompression.
