@@ -27,11 +27,18 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case csv, tsv, json, plist, xml, yaml, xlsx
     // Contacts and GPS tracks. KMZ can only be read.
     case vcf, gpx, kml, kmz, geojson
+    // Data: SQLite databases (read only) and SQL dumps (written only).
+    case sqlite, sql
+    // 3D models. Alembic can only be read.
+    case usdz, usda, usdc, obj, stl, ply, abc
+    // Single compressed files. `decompressed` is the target for getting the original back;
+    // `other` is any file Ameya doesn't otherwise recognise, which can still be compressed.
+    case gz, bz2, xz, decompressed, other
 
     public var id: String { rawValue }
 
     public enum Family: String, Codable, Sendable {
-        case image, document, audio, video, subtitle, archive, data, contacts, geo
+        case image, document, audio, video, subtitle, archive, data, contacts, geo, model, compressed
 
         /// How long one job may run before it is stopped.
         public var timeout: Duration {
@@ -44,6 +51,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             case .archive: .seconds(1800)
             case .data: .seconds(300)
             case .contacts, .geo: .seconds(120)
+            case .model: .seconds(300)
+            case .compressed: .seconds(1800)
             }
         }
     }
@@ -58,9 +67,11 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .mp4, .mov, .m4v: .video
         case .srt, .vtt, .ass, .ssa, .sbv, .ttml, .lrc, .microDVD, .sami: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
-        case .csv, .tsv, .json, .plist, .xml, .yaml, .xlsx: .data
+        case .csv, .tsv, .json, .plist, .xml, .yaml, .xlsx, .sqlite, .sql: .data
         case .vcf: .contacts
         case .gpx, .kml, .kmz, .geojson: .geo
+        case .usdz, .usda, .usdc, .obj, .stl, .ply, .abc: .model
+        case .gz, .bz2, .xz, .decompressed, .other: .compressed
         }
     }
 
@@ -140,6 +151,20 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .kml: "KML"
         case .kmz: "KMZ"
         case .geojson: "GeoJSON"
+        case .sqlite: "SQLite database"
+        case .sql: "SQL dump"
+        case .usdz: "USDZ"
+        case .usda: "USD (text)"
+        case .usdc: "USD"
+        case .obj: "OBJ"
+        case .stl: "STL"
+        case .ply: "PLY"
+        case .abc: "Alembic"
+        case .gz: "Gzip (.gz)"
+        case .bz2: "Bzip2 (.bz2)"
+        case .xz: "XZ (.xz)"
+        case .decompressed: "Decompressed file"
+        case .other: "File"
         }
     }
 
@@ -219,6 +244,18 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .kml: "com.google.earth.kml"
         case .kmz: "com.google.earth.kmz"
         case .geojson: "public.geojson"
+        case .sqlite: "public.database"
+        case .sql: "org.iso.sql"
+        case .usdz: "com.pixar.universal-scene-description-mobile"
+        case .usda, .usdc: "com.pixar.universal-scene-description"
+        case .obj: "public.geometry-definition-format"
+        case .stl: "public.standard-tesselated-geometry-format"
+        case .ply: "public.polygon-file-format"
+        case .abc: "org.alembic.abc"
+        case .gz: "org.gnu.gnu-zip-archive"
+        case .bz2: "public.bzip2-archive"
+        case .xz: "org.tukaani.xz-archive"
+        case .decompressed, .other: "public.data"
         }
     }
 
@@ -249,10 +286,14 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .wav: ["wav", "wave"]
         case .aiff: ["aiff", "aif", "aifc"]
         case .mov: ["mov", "qt"]
-        case .tgz: ["tgz", "gz"]
-        case .tbz2: ["tbz2", "tbz", "bz2"]
-        case .txz: ["txz", "xz"]
+        case .tgz: ["tgz"]
+        case .tbz2: ["tbz2", "tbz"]
+        case .txz: ["txz"]
+        case .gz: ["gz", "gzip"]
+        case .sqlite: ["sqlite", "sqlite3", "db"]
+        case .usdc: ["usdc", "usd"]
         case .vcf: ["vcf", "vcard"]
+        case .decompressed, .other: [] // never matched by extension
         case .tsv: ["tsv", "tab"]
         case .yaml: ["yaml", "yml"]
         default: [rawValue]
@@ -265,6 +306,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .tgz: "tar.gz"
         case .tbz2: "tar.bz2"
         case .txz: "tar.xz"
+        case .decompressed, .other: "bin" // real names come from OutputPlanner
         default: extensions[0]
         }
     }
@@ -327,6 +369,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             switch format {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
             case .rar, .cbr: false // proprietary; extraction only
+            case .sqlite, .abc, .other: false // read only
+            case _ where format.family == .model: modelWritable(format)
             case .webp: true // bundled libwebp encoder (ImageIO only decodes WebP)
             case .kmz: false // read only
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)

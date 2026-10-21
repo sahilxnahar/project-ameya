@@ -7,7 +7,7 @@ extension FileFormat {
     /// ZIP-based formats that are not plain archives; these are never offered ZIP conversions.
     static let zipBasedDocuments: Set<String> = [
         "xlsx", "pptx", "jar", "apk", "ipa", "pages", "numbers", "key", "odp", "ods",
-        "sketch", "xpi", "whl", "nupkg", "vsix", "aar", "kmz", "3mf", "usdz",
+        "sketch", "xpi", "whl", "nupkg", "vsix", "aar", "kmz", "3mf",
     ]
 
     /// Detects a file's format from its contents, using the extension only to break ties
@@ -18,7 +18,7 @@ extension FileFormat {
             header = (try? handle.read(upToCount: headerLength)) ?? Data()
             try? handle.close()
         }
-        return detect(header: header, fileExtension: url.pathExtension)
+        return refineCompressed(detect(header: header, fileExtension: url.pathExtension), url: url)
     }
 
     public static func detect(header: Data, fileExtension: String) -> FileFormat? {
@@ -29,6 +29,7 @@ extension FileFormat {
         if bytes.starts(with: [0x50, 0x4B, 0x03, 0x04]) || bytes.starts(with: [0x50, 0x4B, 0x05, 0x06]) { // ZIP
             if let byExtension, [.docx, .odt, .kmz].contains(byExtension) { return byExtension }
             if let book = detectBook(bytes: bytes, fileExtension: fileExtension, isZip: true) { return book }
+            if isUSDZ(bytes, fileExtension: fileExtension) { return .usdz }
             return zipBasedDocuments.contains(fileExtension.lowercased()) ? nil : .zip
         }
         if bytes.starts(with: [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) { // OLE compound file
@@ -55,7 +56,7 @@ extension FileFormat {
         }
 
         // Binary formats with no usable signature.
-        if let byExtension, [.tga, .raw].contains(byExtension), !bytes.isEmpty {
+        if let byExtension, [.tga, .raw, .stl].contains(byExtension), !bytes.isEmpty {
             return byExtension
         }
         if let subtitle = sniffSubtitleText(bytes, extension: byExtension) { return subtitle }
@@ -63,7 +64,8 @@ extension FileFormat {
         // YAML and XLSX are left out: Ameya can only write them, so they aren't offered as sources.
         // MicroDVD is left out: .sub is also VobSub, a binary format Ameya can't read.
         let textFormats: Set<FileFormat> = [.txt, .srt, .vtt, .html, .md, .csv, .tsv, .json, .xml, .plist,
-                                            .ass, .ssa, .sbv, .ttml, .lrc, .sami, .vcf, .gpx, .kml, .geojson]
+                                            .ass, .ssa, .sbv, .ttml, .lrc, .sami, .vcf, .gpx, .kml, .geojson,
+                                            .obj, .sql]
         if let byExtension, textFormats.contains(byExtension), looksLikeText(bytes) {
             if byExtension == .json, looksLikeGeoJSON(bytes) { return .geojson }
             return byExtension
@@ -156,6 +158,13 @@ extension FileFormat {
         if starts([0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) { return .sevenZip }
         if starts([0x52, 0x61, 0x72, 0x21, 0x1A, 0x07]) { return .rar }
         if starts("ustar", at: 257) { return .tar }
+
+        // Databases and 3D models
+        if starts("SQLite format 3\0") { return .sqlite }
+        if starts("PXR-USDC") { return .usdc }
+        if starts("#usda ") { return .usda }
+        if starts("ply"), bytes.count > 3, [0x20, 0x0A, 0x0D].contains(bytes[3]) { return .ply }
+        if starts("Ogawa") { return .abc }
 
         // ISO base media (HEIF images and MP4-family audio/video)
         if starts("ftyp", at: 4), bytes.count >= 12 {

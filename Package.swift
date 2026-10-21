@@ -6,7 +6,8 @@ let package = Package(
     platforms: [.macOS(.v14)],
     targets: [
         // Formats, capability matrix, output naming, worker protocol and runner. No UI.
-        .target(name: "AmeyaCore"),
+        // Uses libarchive only to peek at the start of .gz/.bz2/.xz files (TAR or single file?).
+        .target(name: "AmeyaCore", dependencies: ["CArchive"]),
         // The system libarchive (BSD-2-Clause), which macOS ships without headers.
         .target(name: "CArchive", linkerSettings: [.linkedLibrary("archive")]),
         // Vendored libwebp 1.6.0 (BSD-3-Clause): WebP and animated WebP encoding, which ImageIO lacks.
@@ -20,7 +21,8 @@ let package = Package(
             ]
         ),
         // Conversion engines. Linked only into the worker process.
-        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore", "CArchive", "CWebP"]),
+        .target(name: "AmeyaEngines", dependencies: ["AmeyaCore", "CArchive", "CWebP"],
+                linkerSettings: [.linkedLibrary("sqlite3")]),
         // One short-lived, sandboxed process per job. Reads stdin, writes stdout.
         .executableTarget(name: "AmeyaWorker", dependencies: ["AmeyaCore", "AmeyaEngines"]),
         // The menu bar app.

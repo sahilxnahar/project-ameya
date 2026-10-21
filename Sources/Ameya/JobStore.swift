@@ -84,7 +84,7 @@ final class JobStore: ObservableObject {
         for url in urls {
             _ = url.startAccessingSecurityScopedResource()
             guard !pending.contains(where: { $0.url == url }) else { continue }
-            if let format = FileFormat.detect(at: url) {
+            if let format = FileFormat.detectForConversion(at: url) {
                 pending.append(PendingFile(url: url, format: format))
             } else {
                 unsupported.append(url.lastPathComponent)

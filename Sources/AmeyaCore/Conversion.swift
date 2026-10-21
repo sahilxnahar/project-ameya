@@ -121,6 +121,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case imagesDropped
     case nonImagesSkipped
     case pagesBecamePictures
+    // 3D models and SQLite
+    case materialsMayNotCarryOver
+    case separateTexturesNotIncluded
+    case onlyLargestTableKept
+    case binaryAsBase64
     case transcribedOnDevice
     case externalResourcesSkipped
 
@@ -161,6 +166,10 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .imagesDropped: "Some pictures couldn't be found in the file and were left out."
         case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
         case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
+        case .materialsMayNotCarryOver: "Materials and textures may not carry over."
+        case .separateTexturesNotIncluded: "Separate texture and material files (.mtl, images) can't be included."
+        case .onlyLargestTableKept: "Only the largest table was kept; convert to JSON or SQL to get every table."
+        case .binaryAsBase64: "Binary values (blobs) were written as Base64 text."
         case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
         case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
         }
@@ -198,6 +207,7 @@ public struct ConversionMatrix: Sendable {
     /// Whether Ameya has an engine for this pair, regardless of what this Mac can encode.
     public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
         guard source != target else { return false }
+        if let route = quickWinRoute(from: source, to: target) { return route }
         if let route = bookRoute(from: source, to: target) { return route }
         if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
@@ -252,6 +262,7 @@ public struct ConversionMatrix: Sendable {
 
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
+        if let notes = Self.quickWinLosses(from: source, to: target) { return notes }
         if let notes = Self.bookLosses(from: source, to: target) { return notes }
         if Self.isTranscription(from: source, to: target) { return [.transcribedOnDevice] }
         switch (source.family, target.family) {
