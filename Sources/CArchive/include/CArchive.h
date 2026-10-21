@@ -51,6 +51,21 @@ ssize_t archive_write_data(struct archive *, const void *buffer, size_t length);
 int archive_write_close(struct archive *);
 int archive_write_free(struct archive *);
 
+// Single compressed files (.gz, .bz2, .xz): the "raw" format is one unnamed entry.
+int archive_read_support_format_raw(struct archive *);
+int archive_read_support_filter_gzip(struct archive *);
+int archive_read_support_filter_bzip2(struct archive *);
+int archive_read_support_filter_xz(struct archive *);
+int archive_read_support_format_tar(struct archive *);
+int archive_read_open_memory(struct archive *, const void *buffer, size_t size);
+int archive_filter_count(struct archive *);
+int archive_filter_code(struct archive *, int filter);
+int archive_write_set_format_raw(struct archive *);
+#define ARCHIVE_FILTER_NONE 0
+#define ARCHIVE_FILTER_GZIP 1
+#define ARCHIVE_FILTER_BZIP2 2
+#define ARCHIVE_FILTER_XZ 6
+
 // Errors
 const char *archive_error_string(struct archive *);
 

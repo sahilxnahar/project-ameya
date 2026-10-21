@@ -66,6 +66,7 @@ enum SelfTest {
                 await check.convert(json, from: .json, to: .plist)
             }
             await check.convert(csv, from: .csv, to: .xlsx)
+            try await checkQuickWins(&check, in: directory)
 
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
@@ -97,6 +98,7 @@ enum SelfTest {
                 let expected = target == .alac ? FileFormat.m4a : target == .xlsx ? .zip : target
                 let detected = target == .xlsx
                     ? FileFormat.detect(header: (try? Data(contentsOf: destination)) ?? Data(), fileExtension: "zip")
+                    : target == .decompressed ? .decompressed // checked byte for byte by the caller
                     : FileFormat.detect(at: destination)
                 guard detected == expected, result.outputBytes > 0 else {
                     print("FAIL \(label): output detected as \(detected?.rawValue ?? "unknown")")

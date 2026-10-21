@@ -23,6 +23,15 @@ public enum Engine {
         var frames = 1
 
         switch (source.family, target.family) {
+        case _ where target.isCompression || target == .decompressed:
+            notes = try SingleFileCompression.convert(input: input, from: source, to: target, output: output, progress: progress)
+
+        case (.model, _):
+            notes = try ModelConverter.convert(input: input, to: target, output: output, progress: progress)
+
+        case _ where source == .sqlite:
+            notes = try SQLiteConverter.convert(input: input, to: target, output: output, progress: progress)
+
         case _ where source.isBookOrComic || target.isBookOrComic:
             (notes, frames) = try BookConverter.convert(input: input, from: source, to: target, output: output,
                                                         options: request.options, progress: progress)

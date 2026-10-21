@@ -198,6 +198,9 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
 | E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
 | Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
+| 3D models | USDZ, USD (USDA/USDC), OBJ, STL, PLY ↔ each other; Alembic in; any model → PNG preview (1024 px) | Model I/O + SceneKit. Materials may not carry over; an OBJ's separate .mtl/textures can't be included |
+| Compression | Any single file → .gz, .bz2, .xz; and back to the original file and name | libarchive raw format. A .gz holding a TAR is treated as TAR.GZ; decompression bombs are stopped |
+| SQLite | .sqlite/.sqlite3/.db → CSV (largest table), JSON (every table), SQL dump | Opened read-only and immutable; blobs as Base64 (CSV/JSON) or X'…' (SQL) |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
