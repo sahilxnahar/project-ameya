@@ -22,6 +22,10 @@ public enum Engine {
             return try PassportPhoto.run(passport, input: inputs[0], request: request, scratch: scratch, progress: progress)
         }
         if let action = request.options.pdf {
+            // Text recognition also takes pictures, so it is routed before PDFTools' PDF-only checks.
+            if PDFToolbox.handles(action) {
+                return try PDFToolbox.run(action, inputs: inputs, request: request, scratch: scratch, progress: progress)
+            }
             return try PDFTools.run(action, inputs: inputs, request: request, scratch: scratch, progress: progress)
         }
         guard inputs.count == 1 else {
@@ -84,6 +88,13 @@ public enum Engine {
             notes = try await Transcriber.convert(
                 input: input, to: target, output: output, scratch: scratch, options: request.options, progress: progress
             )
+
+        case (.image, .document) where target == .docx || target == .md:
+            // "JPG to Word": the picture's words, recognised on this Mac (PDFToolbox writes `output`).
+            let action = PDFAction.ocr(languages: request.options.language.map { [$0] })
+            var ocr = request
+            ocr.options.pdf = action
+            notes = try PDFToolbox.run(action, inputs: [input], request: ocr, scratch: scratch, progress: progress).result.notes
 
         case (.image, .image), (.image, .document), (.document, .image):
             let (data, result) = try ImageConverter.convert(try read(input), request: request, progress: progress)

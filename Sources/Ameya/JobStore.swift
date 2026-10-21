@@ -67,7 +67,9 @@ final class Job: ObservableObject, Identifiable {
 
     /// The longest timeout among the sources' families.
     var timeout: Duration {
-        sourceFormats.map(\.family.timeout).max() ?? .seconds(300)
+        // Text recognition reads every scanned page (and loads its models the first time).
+        if case .ocr = request.options.pdf { return .seconds(3600) }
+        return sourceFormats.map(\.family.timeout).max() ?? .seconds(300)
     }
 }
 

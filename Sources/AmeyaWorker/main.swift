@@ -25,8 +25,16 @@ setpgid(0, 0)
 let arguments = CommandLine.arguments
 guard let flag = arguments.firstIndex(of: WorkerProtocol.requestArgument),
       flag + 1 < arguments.count,
-      let request = try? WorkerProtocol.decodeRequest(arguments[flag + 1]) else {
+      var request = try? WorkerProtocol.decodeRequest(arguments[flag + 1]) else {
     fail("The converter received an invalid request.")
+}
+// A PDF password arrives ahead of the file on stdin, never on the command line (WorkerSecret).
+if request.options.secretOnStdin == true {
+    do {
+        WorkerSecret.restore(try WorkerSecret.receive(from: FileHandle.standardInput), into: &request)
+    } catch {
+        fail("The converter couldn't read the password.")
+    }
 }
 
 #if DEBUG

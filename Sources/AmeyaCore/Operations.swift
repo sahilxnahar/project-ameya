@@ -89,8 +89,34 @@ public enum PDFAction: Codable, Sendable, Equatable {
     /// Re-saves pages that are mostly pictures as JPEG (`quality` 0…1 sets resolution and JPEG
     /// quality); text pages stay vector. With `targetBytes`, lowers quality until the file fits.
     case compress(quality: Double, targetBytes: Int? = nil)
-    /// Add a searchable text layer to scanned pages.
+    /// Add a searchable text layer to scanned pages. With an image source and a text target
+    /// (TXT, DOCX, MD, RTF, HTML) it copies the picture's text instead. `nil` uses the Mac's languages.
     case ocr(languages: [String]?)
+    /// Small numbers at the bottom centre of every page.
+    case addPageNumbers(PageNumberStyle)
+    /// Diagonal text across every page; opacity 0…1.
+    case watermark(text: String, opacity: Double)
+    /// Encrypts the PDF so it needs this password to open. Sent to the worker on stdin, never argv.
+    case protect(password: String)
+    /// Writes an unencrypted copy; needs the current password. Sent to the worker on stdin.
+    case removePassword(password: String)
+
+    /// The password this action carries, if any (kept off the worker's command line).
+    public var secret: String? {
+        switch self {
+        case .protect(let password), .removePassword(let password): password
+        default: nil
+        }
+    }
+
+    /// The same action carrying `secret` instead of its password.
+    public func replacingSecret(with secret: String) -> PDFAction {
+        switch self {
+        case .protect: .protect(password: secret)
+        case .removePassword: .removePassword(password: secret)
+        default: self
+        }
+    }
 
     /// Whether the action produces several files.
     public var producesSeveralFiles: Bool {

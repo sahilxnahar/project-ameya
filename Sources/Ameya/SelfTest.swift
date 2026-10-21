@@ -25,7 +25,8 @@ enum SelfTest {
             let originalPNG = try makeTransparentPNG()
             try originalPNG.write(to: png)
             let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
-            for target in matrix.targets(for: .png) where target != .txt { // PNG → text reads QR codes; tested below
+            // PNG → text reads QR codes and PNG → Word/Markdown recognises words; both tested with real content.
+            for target in matrix.targets(for: .png) where ![.txt, .docx, .md].contains(target) {
                 await check.convert(png, from: .png, to: target)
             }
 
@@ -138,6 +139,7 @@ enum SelfTest {
             await check.checkTools(png: png) // see SelfTestTools.swift
             await check.checkPassportPhoto(png: png) // see SelfTestPassport.swift
             await check.checkPresets() // see SelfTestPresets.swift
+            await check.checkPDFToolbox() // see SelfTestPDF.swift
 
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")

@@ -6,7 +6,9 @@ import PDFKit
 /// and extracts text from PDFs. Uses the system's own document readers and writers.
 @MainActor
 enum DocumentConverter {
-    static func convert(_ data: Data, from source: FileFormat, to target: FileFormat) throws -> (Data, [ConversionNote]) {
+    /// - Parameter languages: for text recognised in scanned PDF pages; `nil` uses the Mac's languages.
+    static func convert(_ data: Data, from source: FileFormat, to target: FileFormat,
+                        languages: [String]? = nil) throws -> (Data, [ConversionNote]) {
         // Markdown → HTML is rendered directly, which keeps semantic tags and code formatting.
         if source == .md && target == .html {
             return (Data(try MarkdownRenderer.html(decodeText(data)).utf8), [])
@@ -14,8 +16,10 @@ enum DocumentConverter {
         var notes: [ConversionNote] = []
         let text: NSAttributedString
         if source == .pdf {
-            text = try textOfPDF(data)
+            let recognised: Int
+            (text, recognised) = try textOfPDF(data, languages: languages)
             notes.append(.onlyTextKept)
+            if recognised > 0 { notes.append(.textRecognisedFromScans) }
         } else {
             text = try read(data, as: source)
         }
@@ -95,17 +99,31 @@ enum DocumentConverter {
         return String(decoding: data, as: UTF8.self)
     }
 
-    static func textOfPDF(_ data: Data) throws -> NSAttributedString {
+    /// The PDF's text, page by page. Pages without text (scans) are read with text recognition.
+    /// Also returns how many pages were recognised.
+    static func textOfPDF(_ data: Data, languages: [String]? = nil) throws -> (NSAttributedString, recognised: Int) {
         guard let document = PDFDocument(data: data) else { throw ConversionError.unreadable }
         if document.isLocked && !document.unlock(withPassword: "") { throw ConversionError.lockedPDF }
         let result = NSMutableAttributedString()
+        var recognised = 0
         for index in 0..<document.pageCount {
-            guard let page = document.page(at: index), let pageText = page.attributedString, pageText.length > 0 else { continue }
+            guard let page = document.page(at: index) else { continue }
+            var pageText = page.attributedString ?? NSAttributedString()
+            if PDFOCR.needsRecognition(page) {
+                let scanned = try PDFOCR.recognisedText(of: page, languages: languages, maxPixels: ConversionOptions.defaultMaxPixels)
+                if !scanned.isEmpty {
+                    pageText = NSAttributedString(string: scanned, attributes: [
+                        .font: NSFont(name: "Helvetica", size: 12) ?? NSFont.systemFont(ofSize: 12),
+                    ])
+                    recognised += 1
+                }
+            }
+            guard pageText.length > 0 else { continue }
             if result.length > 0 { result.append(NSAttributedString(string: "\n\n")) }
             result.append(pageText)
         }
         guard !result.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ConversionError.noText }
-        return result
+        return (result, recognised)
     }
 }
 
