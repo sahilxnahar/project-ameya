@@ -18,11 +18,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case srt, vtt
     // Archives. RAR can only be read.
     case zip, tar, tgz, tbz2, txz, sevenZip = "7z", rar
+    // Contacts, GPS tracks (KMZ can only be read) and tabular data
+    case vcf, gpx, kml, kmz, geojson, csv, json
 
     public var id: String { rawValue }
 
     public enum Family: String, Codable, Sendable {
-        case image, document, audio, video, subtitle, archive
+        case image, document, audio, video, subtitle, archive, contacts, geo, data
 
         /// How long one job may run before it is stopped.
         public var timeout: Duration {
@@ -33,6 +35,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             case .video: .seconds(3600)
             case .subtitle: .seconds(30)
             case .archive: .seconds(1800)
+            case .contacts, .geo, .data: .seconds(120)
             }
         }
     }
@@ -47,6 +50,9 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .mp4, .mov, .m4v: .video
         case .srt, .vtt: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
+        case .vcf: .contacts
+        case .gpx, .kml, .kmz, .geojson: .geo
+        case .csv, .json: .data
         }
     }
 
@@ -103,6 +109,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .txz: "TAR.XZ"
         case .sevenZip: "7-Zip"
         case .rar: "RAR"
+        case .vcf: "vCard"
+        case .gpx: "GPX"
+        case .kml: "KML"
+        case .kmz: "KMZ"
+        case .geojson: "GeoJSON"
+        case .csv: "CSV"
+        case .json: "JSON"
         }
     }
 
@@ -159,6 +172,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .txz: "org.tukaani.tar-xz-archive"
         case .sevenZip: "org.7-zip.7-zip-archive"
         case .rar: "com.rarlab.rar-archive"
+        case .vcf: "public.vcard"
+        case .gpx: "com.topografix.gpx"
+        case .kml: "com.google.earth.kml"
+        case .kmz: "com.google.earth.kmz"
+        case .geojson: "public.geojson"
+        case .csv: "public.comma-separated-values-text"
+        case .json: "public.json"
         }
     }
 
@@ -189,6 +209,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .tgz: ["tgz", "gz"]
         case .tbz2: ["tbz2", "tbz", "bz2"]
         case .txz: ["txz", "xz"]
+        case .vcf: ["vcf", "vcard"]
         default: [rawValue]
         }
     }
@@ -253,6 +274,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             switch format {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
             case .rar: false // proprietary; extraction only
+            case .kmz: false // read only
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true
             }

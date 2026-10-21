@@ -27,7 +27,7 @@ extension FileFormat {
 
         // Containers whose first bytes don't say what's inside.
         if bytes.starts(with: [0x50, 0x4B, 0x03, 0x04]) || bytes.starts(with: [0x50, 0x4B, 0x05, 0x06]) { // ZIP
-            if let byExtension, [.docx, .odt].contains(byExtension) { return byExtension }
+            if let byExtension, [.docx, .odt, .kmz].contains(byExtension) { return byExtension }
             return zipBasedDocuments.contains(fileExtension.lowercased()) ? nil : .zip
         }
         if bytes.starts(with: [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) { // OLE compound file
@@ -50,7 +50,9 @@ extension FileFormat {
             return byExtension
         }
         // Text formats with no reliable signature: accept the extension if the bytes look like text.
-        if let byExtension, [.txt, .srt, .vtt, .html, .md].contains(byExtension), looksLikeText(bytes) {
+        let textByExtension: Set<FileFormat> = [.txt, .srt, .vtt, .html, .md, .vcf, .gpx, .kml, .geojson, .csv, .json]
+        if let byExtension, textByExtension.contains(byExtension), looksLikeText(bytes) {
+            if byExtension == .json, looksLikeGeoJSON(bytes) { return .geojson }
             return byExtension
         }
         return nil
@@ -105,6 +107,12 @@ extension FileFormat {
         let lowered = String(decoding: bytes.prefix(32), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.hasPrefix("<!doctype html") || lowered.hasPrefix("<html") { return .html }
+        if lowered.hasPrefix("begin:vcard") { return .vcf }
+        if lowered.hasPrefix("<") {
+            let head = String(decoding: bytes, as: UTF8.self)
+            if head.contains("<gpx") { return .gpx }
+            if head.contains("<kml") { return .kml }
+        }
 
         // Audio
         if starts("ID3") { return .mp3 }
@@ -143,10 +151,22 @@ extension FileFormat {
         return nil
     }
 
-    /// True when the bytes contain no NULs, or start with a UTF-16 byte-order mark.
+    /// True when the bytes contain no NULs, start with a UTF-16 byte-order mark, or look like
+    /// UTF-16 without one (NULs only in every other byte, as in mostly-Latin UTF-16 text).
     static func looksLikeText(_ bytes: [UInt8]) -> Bool {
         if bytes.isEmpty { return true }
         if bytes.starts(with: [0xFF, 0xFE]) || bytes.starts(with: [0xFE, 0xFF]) { return true }
-        return !bytes.contains(0)
+        guard bytes.contains(0) else { return true }
+        let even = stride(from: 0, to: bytes.count, by: 2).filter { bytes[$0] == 0 }.count
+        let odd = stride(from: 1, to: bytes.count, by: 2).filter { bytes[$0] == 0 }.count
+        let pairs = bytes.count / 2
+        return pairs >= 2 && (even == 0 || odd == 0) && max(even, odd) * 3 >= pairs
+    }
+
+    /// A JSON file whose opening bytes name a GeoJSON object type.
+    static func looksLikeGeoJSON(_ bytes: [UInt8]) -> Bool {
+        let head = String(decoding: bytes, as: UTF8.self).filter { !$0.isWhitespace }
+        return head.contains("\"type\":\"FeatureCollection\"")
+            || (head.contains("\"type\":\"Feature\"") && head.contains("\"geometry\""))
     }
 }

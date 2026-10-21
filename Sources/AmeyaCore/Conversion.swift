@@ -11,6 +11,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
+    /// Re-encodes a text file in place (same format in and out), e.g. to fix its encoding.
+    public var text: TextEdits?
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -20,14 +22,35 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         maxPixels: Int = ConversionOptions.defaultMaxPixels,
         maxFrames: Int = ConversionOptions.defaultMaxFrames,
         debugDelaySeconds: Double? = nil,
-        debugCrash: Bool? = nil
+        debugCrash: Bool? = nil,
+        text: TextEdits? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
         self.maxFrames = maxFrames
         self.debugDelaySeconds = debugDelaySeconds
         self.debugCrash = debugCrash
+        self.text = text
     }
+}
+
+/// Edits applied when a text file is converted to itself: the result is always UTF-8 without a BOM.
+public struct TextEdits: Codable, Sendable, Equatable {
+    public enum LineEndings: String, Codable, Sendable {
+        case lf, crlf, keep
+    }
+
+    /// IANA name of the source encoding (e.g. "windows-1252"). `nil` detects it.
+    public var encoding: String?
+    public var lineEndings: LineEndings
+
+    public init(encoding: String? = nil, lineEndings: LineEndings = .lf) {
+        self.encoding = encoding
+        self.lineEndings = lineEndings
+    }
+
+    /// Formats whose text can be re-encoded to UTF-8 in place.
+    public static let editableFormats: Set<FileFormat> = [.txt, .srt, .vtt, .md, .csv, .vcf]
 }
 
 /// What the app asks the worker to do. Sent as JSON on the worker's command line.
@@ -63,6 +86,12 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case rawDevelopedWithDefaults
     case unsafeEntriesSkipped
     case specialFilesSkipped
+    case textRecoded
+    case madeQRCode
+    case onlyCodesRead
+    case contactFieldsLimited
+    case tracksBecamePoints
+    case trackTimesRemoved
 
     public var message: String {
         switch self {
@@ -82,6 +111,12 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
         case .unsafeEntriesSkipped: "Entries with unsafe paths (absolute, or containing ..) were left out."
         case .specialFilesSkipped: "Links pointing outside the archive and special files were left out."
+        case .textRecoded: "The text was converted to UTF-8."
+        case .madeQRCode: "The text was turned into a QR code."
+        case .onlyCodesRead: "Only the QR codes and barcodes in the image are read."
+        case .contactFieldsLimited: "Only names, organisation, emails, phones, addresses, birthday and note are kept."
+        case .tracksBecamePoints: "Tracks and routes become one row per point."
+        case .trackTimesRemoved: "Times are kept only for tracks where every point has one."
         }
     }
 }
@@ -119,16 +154,25 @@ public struct ConversionMatrix: Sendable {
         guard source != target else { return false }
         switch (source.family, target.family) {
         case (.image, .image): return true
-        case (.image, .document): return target == .pdf
+        case (.image, .document): return target == .pdf || target == .txt // text: decoded QR codes
         case (.image, .video): return source == .gif
         case (.document, .document):
             return source == .pdf ? target.isTextDocument : (target.isTextDocument || target == .pdf)
-        case (.document, .image): return source == .pdf
+        case (.document, .image): return source == .pdf || (source == .txt && target == .png) // QR code
+        case (.contacts, .data): return true
+        case (.data, .contacts): return source == .csv
+        case (.geo, .geo): return target != .kmz
+        case (.geo, .data): return target == .csv
         case (.audio, .audio), (.video, .video), (.video, .audio), (.subtitle, .subtitle): return true
         case (.video, .image): return target == .gif
         case (.archive, .archive): return target != .rar
         default: return false
         }
+    }
+
+    /// Whether a file can be rewritten in its own format with the given edits.
+    public static func canEdit(_ format: FileFormat, options: ConversionOptions) -> Bool {
+        options.text != nil && TextEdits.editableFormats.contains(format)
     }
 
     /// Targets every one of the given sources can be converted to.
@@ -143,6 +187,14 @@ public struct ConversionMatrix: Sendable {
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
         switch (source.family, target.family) {
+        case (.document, .image) where source == .txt:
+            return [.madeQRCode]
+        case (.image, .document) where target == .txt:
+            return [.onlyCodesRead]
+        case (.contacts, _):
+            return [.contactFieldsLimited]
+        case (.geo, .data):
+            return [.tracksBecamePoints]
         case (.document, .document) where source == .pdf:
             return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]
         case (.document, .document) where target == .txt:
