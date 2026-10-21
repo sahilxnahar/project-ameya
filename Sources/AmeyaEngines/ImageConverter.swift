@@ -44,10 +44,20 @@ public enum ImageConverter {
         request: ConversionRequest,
         progress: (Double) -> Void = { _ in }
     ) throws -> (Data, ConversionResult) {
-        let decoded = try ImageDecoder.decode(data, options: request.options)
-        progress(0.4)
         let target = request.target
         var notes: [ConversionNote] = []
+        let decoded: DecodedImage
+        if request.source == .svg || (request.source == nil && SVGRenderer.looksLikeSVG(data)) {
+            if target == .pdf { // drawn straight into the PDF so it stays vector
+                let (pdf, svgNotes) = try SVGRenderer.pdf(data, options: request.options)
+                progress(1)
+                return (pdf, ConversionResult(outputBytes: pdf.count, frames: 1, notes: svgNotes))
+            }
+            (decoded, notes) = try SVGRenderer.decode(data, options: request.options)
+        } else {
+            decoded = try ImageDecoder.decode(data, options: request.options)
+        }
+        progress(0.4)
 
         // Decide which frames survive in the target format.
         var frames = decoded.frames
@@ -89,7 +99,13 @@ public enum ImageConverter {
             output = try PDFWriter.write(frames)
         } else {
             let animated = decoded.kind == .animated && target.supportsAnimation && frames.count > 1
-            output = try encode(frames, as: target, animated: animated, loopCount: decoded.loopCount, quality: request.options.quality) { fraction in
+            // WebP: lossless for sources that were lossless, unless the user picked a quality.
+            let losslessSource: Set<FileFormat> = [.png, .tiff, .bmp, .gif]
+            let lossless = request.options.quality == nil && FileFormat.sniff(data.prefix(32)).map(losslessSource.contains) == true
+            output = try encode(
+                frames, as: target, animated: animated, loopCount: decoded.loopCount,
+                quality: request.options.quality, lossless: lossless
+            ) { fraction in
                 progress(0.4 + 0.6 * fraction)
             }
         }
@@ -103,8 +119,14 @@ public enum ImageConverter {
         animated: Bool,
         loopCount: Int,
         quality: Double?,
+        lossless: Bool = false,
         progress: (Double) -> Void
     ) throws -> Data {
+        if target == .webp {
+            return try WebPEncoder.encode(
+                frames, animated: animated, loopCount: loopCount, quality: quality, lossless: lossless, progress: progress
+            )
+        }
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(
             output, target.typeIdentifier as CFString, frames.count, nil

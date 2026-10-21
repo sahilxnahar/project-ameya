@@ -8,9 +8,14 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var maxPixels: Int
     /// Upper bound on pages/frames read from one file.
     public var maxFrames: Int
+    /// Long side, in pixels, for images drawn from vectors (SVG). `nil` keeps the SVG's own size,
+    /// or 1024 px when it has none.
+    public var rasterLongSide: Int? = nil
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
+    /// Spoken language for transcription, as a BCP-47 tag such as "en-GB". `nil` uses the Mac's language.
+    public var language: String?
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -20,13 +25,15 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         maxPixels: Int = ConversionOptions.defaultMaxPixels,
         maxFrames: Int = ConversionOptions.defaultMaxFrames,
         debugDelaySeconds: Double? = nil,
-        debugCrash: Bool? = nil
+        debugCrash: Bool? = nil,
+        language: String? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
         self.maxFrames = maxFrames
         self.debugDelaySeconds = debugDelaySeconds
         self.debugCrash = debugCrash
+        self.language = language
     }
 }
 
@@ -80,6 +87,8 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case separateTexturesNotIncluded
     case onlyLargestTableKept
     case binaryAsBase64
+    case transcribedOnDevice
+    case externalResourcesSkipped
 
     public var message: String {
         switch self {
@@ -114,6 +123,8 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .separateTexturesNotIncluded: "Separate texture and material files (.mtl, images) can't be included."
         case .onlyLargestTableKept: "Only the largest table was kept; convert to JSON or SQL to get every table."
         case .binaryAsBase64: "Binary values (blobs) were written as Base64 text."
+        case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
+        case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
         }
     }
 }
@@ -151,6 +162,7 @@ public struct ConversionMatrix: Sendable {
         guard source != target else { return false }
         if let route = quickWinRoute(from: source, to: target) { return route }
         if let route = bookRoute(from: source, to: target) { return route }
+        if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
         case (.image, .image): return true
         case (.image, .document): return target == .pdf
@@ -178,6 +190,11 @@ public struct ConversionMatrix: Sendable {
         return notes
     }
 
+    /// Speech in an audio or video file becomes a plain transcript or timed captions.
+    public static func isTranscription(from source: FileFormat, to target: FileFormat) -> Bool {
+        (source.family == .audio || source.family == .video) && [.txt, .srt, .vtt].contains(target)
+    }
+
     /// Targets every one of the given sources can be converted to.
     public func commonTargets(for sources: [FileFormat]) -> [FileFormat] {
         guard let first = sources.first else { return [] }
@@ -191,6 +208,7 @@ public struct ConversionMatrix: Sendable {
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
         if let notes = Self.quickWinLosses(from: source, to: target) { return notes }
         if let notes = Self.bookLosses(from: source, to: target) { return notes }
+        if Self.isTranscription(from: source, to: target) { return [.transcribedOnDevice] }
         switch (source.family, target.family) {
         case (.document, .document) where source == .pdf:
             return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]

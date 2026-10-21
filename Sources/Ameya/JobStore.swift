@@ -137,6 +137,12 @@ final class JobStore: ObservableObject {
         job.state = .running
         job.task = Task { [weak self] in
             let request = ConversionRequest(source: job.sourceFormat, target: job.target)
+            if ConversionMatrix.isTranscription(from: job.sourceFormat, to: job.target),
+               let problem = await SpeechSetup.prepare(language: request.options.language) {
+                job.state = .failed(problem)
+                self?.finish(job)
+                return
+            }
             do {
                 let result = try await runner.run(input: job.source, destination: job.destination, request: request) { value in
                     Task { @MainActor in job.progress = value }

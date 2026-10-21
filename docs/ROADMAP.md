@@ -10,7 +10,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 
 1. **Originals are never modified.** Every job writes a new file. A checksum proves the source is unchanged.
 2. **The interface never freezes.** All file work runs in a separate sandboxed worker process with time and memory limits. Cancel kills the worker; a crash fails one job, not the app.
-3. **Private by default.** No network access for file processing. AI features run on-device only.
+3. **Everything stays on this Mac.** No network access at all: no accounts, no servers, no uploads, no downloads. The app and its workers have no network permission, and a test enforces it. Smart features use models already on the Mac.
 4. **Honest output.** If a conversion loses something (transparency, layers, pages, quality), the app says so before it runs.
 5. **Tested on real files.** Every engine ships with fixtures and round-trip tests. CI runs on every push.
 6. **Licence-clean.** MPL-2.0 project code. No GPL code. Satsuma (MIT) may be reused with credit. FFmpeg only as an LGPL build without GPL encoders; H.264/HEVC encoding uses Apple VideoToolbox.
@@ -97,7 +97,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Trim, split, crop, change speed, join | P0 | ⬜ |
 | Compress with size presets (email, WhatsApp, Discord 10 MB) | P0 | ⬜ |
 | Extract audio, save frames, thumbnail grid, video → GIF with size target | P0 | ⬜ |
-| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | ⬜ |
+| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | 🚧 SRT/VTT done; burn-in to do |
 | Redact video (blur regions, auto-blur faces) | P1 | ⬜ |
 | Auto-cut silences | P1 | ⬜ |
 | Landscape → vertical 9:16 following the subject | P1 | ⬜ |
@@ -109,7 +109,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 |---|---|---|
 | Trim, merge, fade, normalise loudness (incl. −16 LUFS podcast preset) | P0 | ⬜ |
 | Channels (mono/stereo/swap), speed and pitch | P0 | ⬜ |
-| Transcribe to text | P0 | ⬜ |
+| Transcribe to text | P0 | ✅ |
 | Bleep words, voice isolation / noise removal | P1 | ⬜ |
 | Ringtone maker (.m4r), trim silence, audio visualiser video | P1 | ⬜ |
 | BPM and key detection | P2 | ⬜ |
@@ -136,8 +136,8 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Checksums + verify a download against a published hash | P0 | ⬜ |
 | Batch rename (patterns, date taken, content-based names) | P1 | ⬜ |
 | Password-encrypt a file (opens on other platforms) | P1 | ⬜ |
-| Send to phone over Wi-Fi via QR code (local, expiring) | P1 | ⬜ |
-| AirDrop, iCloud Drive / Dropbox folder save | P1 | ⬜ |
+| Send to phone over Wi-Fi | — | Not planned (needs the network) |
+| Share sheet (AirDrop, Messages, Mail) handled by macOS, not by Ameya | P2 | ⬜ |
 | QR code create and read | P1 | ⬜ |
 | Sort into folders by date/place, find largest files, duplicate cleanup | P2 | ⬜ |
 | Base64, split/join large files, check an app's code signature | P2 | ⬜ |
@@ -178,7 +178,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Universal binary, macOS 14+ | P0 | ✅ |
 | Accessibility audit (VoiceOver, keyboard, Reduce Motion/Transparency) | P0 | ⬜ |
 | Developer ID signing + notarization + auto-update (needs Apple Developer account) | P0 | ⬜ |
-| Website with docs and downloads | P1 | ⬜ |
+| Project website (static, outside the app) | P2 | ⬜ |
 
 ## Formats
 
@@ -186,7 +186,8 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 | Family | Converts | Notes |
 |---|---|---|
-| Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; WebP, JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
+| Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, WebP (still and animated), JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
+| Vector | SVG and SVGZ → every image format above (transparent) and → PDF (vector, text kept as text) | Rendered by the system SVG engine (CoreSVG); 1024 px long side when the SVG has no size; outside links dropped |
 | Icons | Any image → ICO (16–256 px) and ICNS (16–1024 px), all standard sizes in one file | Padded to a square, centred |
 | Markdown | Markdown ↔ HTML, DOCX, DOC, RTF, ODT, TXT, and → PDF; PDF → Markdown | Headings, lists, tables, code, links, bold/italic. Apple's DOCX writer drops links |
 | Archives | ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, 7-Zip ↔ each other; RAR in | Unsafe paths, escaping links and zip bombs are blocked |
@@ -201,10 +202,11 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | 3D models | USDZ, USD (USDA/USDC), OBJ, STL, PLY ↔ each other; Alembic in; any model → PNG preview (1024 px) | Model I/O + SceneKit. Materials may not carry over; an OBJ's separate .mtl/textures can't be included |
 | Compression | Any single file → .gz, .bz2, .xz; and back to the original file and name | libarchive raw format. A .gz holding a TAR is treated as TAR.GZ; decompression bombs are stopped |
 | SQLite | .sqlite/.sqlite3/.db → CSV (largest table), JSON (every table), SQL dump | Opened read-only and immutable; blobs as Base64 (CSV/JSON) or X'…' (SQL) |
+| Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only, with language models already on the Mac (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); never downloads; captions ≤ 2 × 42 chars, ≤ 7 s |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
-Not yet: MP3 output, WebP output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
+Not yet: MP3 output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.
@@ -219,7 +221,7 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | ICO, ICNS, favicon set, iOS/macOS app-icon set | ✔ | ✔ | IIO + Own | P0 |
 | PDF (page ↔ image) | ✔ | ✔ | PK | P0 |
 | RAW: DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2 | ✔ | — | Core Image RAW | P0 |
-| SVG | ✔ | ✔ (traced) | WK render / Own trace | P1 |
+| SVG, SVGZ | ✔ | ✔ (traced) | CoreSVG render (done) / Own trace | P1 |
 | JPEG XL | ✔ | ✔ | IIO (where supported) | P1 |
 | Live Photo → MOV/GIF | ✔ | — | AV | P1 |
 | HDR → SDR tone mapping, CMYK for print, P3 ↔ sRGB | ✔ | ✔ | Core Image / ColorSync | P1 |
@@ -265,7 +267,7 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | DOCX, DOC, ODT, WordML | ✔ | ✔ | TU | P0 |
 | PDF ↔ DOCX / TXT (with OCR fallback) | ✔ | ✔ | PK + Vision + Own | P0 |
 | Markdown | ✔ | ✔ | Own | P0 |
-| Web page URL / .webarchive → PDF, Markdown | ✔ | — | WK | P1 |
+| .webarchive → PDF, Markdown (web page URLs: not planned, needs the network) | ✔ | — | WK | P1 |
 | EPUB ↔ PDF, EPUB from Markdown/DOCX | ✔ | ✔ | WK + Own | P1 |
 | EML / MSG → PDF | ✔ | — | Own + WK | P1 |
 | Pages, Numbers, Keynote (preview-based export) | ✔ | — | Quick Look | P2 |
