@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Linked into the worker binary (__TEXT,__info_plist). The copy signed with its own sandbox
+     (Contents/MacOS/ameya-worker, used by the ameya command-line tool) needs an embedded
+     Info.plist: macOS refuses to start a bare sandboxed executable without one. -->
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.sahilxnahar.ameya.worker</string>
+	<key>CFBundleName</key>
+	<string>Ameya converter</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+</dict>
+</plist>

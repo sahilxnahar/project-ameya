@@ -14,6 +14,9 @@ if [ "${NATIVE:-0}" = "1" ]; then
 else
     ARCH_FLAGS="--arch arm64 --arch x86_64"
 fi
+# The compiler records the App Intents (Shortcuts actions) as "const values" for
+# scripts/app-intents-metadata.sh. Same flags for every build, so modules aren't rebuilt twice.
+ARCH_FLAGS="$ARCH_FLAGS -Xswiftc -emit-const-values -Xswiftc -Xfrontend -Xswiftc -const-gather-protocols-file -Xswiftc -Xfrontend -Xswiftc $ROOT/scripts/app-intents-protocols.json"
 
 # shellcheck disable=SC2086
 swift build -c release $ARCH_FLAGS --product Ameya
@@ -27,6 +30,14 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$BIN/Ameya" "$APP/Contents/MacOS/Ameya"
 cp "$BIN/AmeyaWorker" "$APP/Contents/MacOS/AmeyaWorker"
+# The ameya command-line tool (Sources/Ameya/Automation/CommandLineTool.swift): the app's executable,
+# unsandboxed, in Helpers ("ameya" next to "Ameya" in MacOS would be the same file on a
+# case-insensitive disk), plus a worker copy with its own sandbox for it to use.
+mkdir -p "$APP/Contents/Helpers"
+cp "$BIN/Ameya" "$APP/Contents/Helpers/ameya"
+cp "$BIN/AmeyaWorker" "$APP/Contents/MacOS/ameya-worker"
+# Shortcuts actions: Contents/Resources/Metadata.appintents.
+"$ROOT/scripts/app-intents-metadata.sh" "$BIN/Ameya" "$APP/Contents/Resources"
 # The LGPL FFmpeg helper (scripts/build-ffmpeg.sh). Without it, Ogg/Opus/MP3-out/MKV/WebM/AVI aren't offered.
 FFMPEG="$ROOT/.build-deps/ffmpeg/bin/ameya-ffmpeg"
 if [ -x "$FFMPEG" ]; then
@@ -46,6 +57,12 @@ if [ -f "$APP/Contents/MacOS/ameya-ffmpeg" ]; then
 fi
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
     --entitlements "$ROOT/Resources/AmeyaWorker.entitlements" "$APP/Contents/MacOS/AmeyaWorker"
+codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
+    --identifier io.github.sahilxnahar.ameya.worker \
+    --entitlements "$ROOT/Resources/AmeyaWorkerStandalone.entitlements" "$APP/Contents/MacOS/ameya-worker"
+# No entitlements: the command-line tool reads the files named in Terminal; parsing happens in ameya-worker.
+codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
+    --identifier io.github.sahilxnahar.ameya.cli "$APP/Contents/Helpers/ameya"
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
     --entitlements "$ROOT/Resources/Ameya.entitlements" "$APP"
 codesign --verify --strict "$APP"

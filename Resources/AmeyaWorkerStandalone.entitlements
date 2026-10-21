@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Contents/MacOS/ameya-worker: the same worker, for the ameya command-line tool. That tool
+	     isn't sandboxed, so `inherit` (which needs a sandboxed parent) can't be used; this copy gets
+	     its own sandbox with no file access at all. It only uses the descriptors it is handed. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>

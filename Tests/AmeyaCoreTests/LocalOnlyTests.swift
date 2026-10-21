@@ -8,7 +8,7 @@ struct LocalOnlyTests {
     static let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    @Test("No entitlement grants network access", arguments: ["Ameya.entitlements", "AmeyaWorker.entitlements"])
+    @Test("No entitlement grants network access", arguments: ["Ameya.entitlements", "AmeyaWorker.entitlements", "AmeyaWorkerStandalone.entitlements"])
     func entitlements(file: String) throws {
         let data = try Data(contentsOf: Self.root.appendingPathComponent("Resources/\(file)"))
         let plist = try #require(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])

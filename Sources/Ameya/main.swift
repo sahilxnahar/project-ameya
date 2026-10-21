@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+// Started as `ameya` (Contents/Helpers/ameya): the command-line tool (Automation/CommandLineTool.swift).
+if CommandLineTool.isRequested() {
+    exit(await CommandLineTool.main())
+}
 // `Ameya --self-test` converts generated files through the real sandboxed worker and exits.
 // CI runs it against the built app bundle.
 if CommandLine.arguments.contains("--self-test") {
