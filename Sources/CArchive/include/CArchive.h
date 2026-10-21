@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <time.h>
 
 struct archive;
 struct archive_entry;
@@ -66,5 +67,10 @@ mode_t archive_entry_filetype(struct archive_entry *);
 int64_t archive_entry_size(struct archive_entry *);
 int archive_entry_size_is_set(struct archive_entry *);
 int archive_entry_is_encrypted(struct archive_entry *);
+struct archive_entry *archive_entry_new(void);
+void archive_entry_set_filetype(struct archive_entry *, unsigned int);
+void archive_entry_set_perm(struct archive_entry *, mode_t);
+void archive_entry_set_size(struct archive_entry *, int64_t);
+void archive_entry_set_mtime(struct archive_entry *, time_t, long);
 
 #endif

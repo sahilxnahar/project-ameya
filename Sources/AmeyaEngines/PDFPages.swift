@@ -26,7 +26,8 @@ enum PDFRasterizer {
         return DecodedImage(frames: frames, kind: pageCount > 1 ? .paged : .single, loopCount: 0)
     }
 
-    private static func render(_ page: CGPDFPage, maxPixels: Int) throws -> DecodedFrame {
+    /// One page as an opaque bitmap. Also used page by page for comics, to keep memory flat.
+    static func render(_ page: CGPDFPage, maxPixels: Int) throws -> DecodedFrame {
         let box = page.getBoxRect(.cropBox)
         let quarterTurns = ((page.rotationAngle % 360) + 360) % 360 / 90
         let size = quarterTurns % 2 == 1 ? CGSize(width: box.height, height: box.width) : box.size

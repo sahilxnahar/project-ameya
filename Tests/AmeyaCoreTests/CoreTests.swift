@@ -60,7 +60,7 @@ struct FormatDetectionTests {
         #expect(FileFormat.detect(header: zip, fileExtension: "zip") == .zip)
         #expect(FileFormat.detect(header: zip, fileExtension: "") == .zip)
         #expect(FileFormat.detect(header: zip, fileExtension: "xlsx") == nil)
-        #expect(FileFormat.detect(header: zip, fileExtension: "epub") == nil)
+        #expect(FileFormat.detect(header: zip, fileExtension: "epub") == .epub)
         let ole = Data([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1])
         #expect(FileFormat.detect(header: ole, fileExtension: "doc") == .doc)
         #expect(FileFormat.detect(header: ole, fileExtension: "xls") == nil)
@@ -74,6 +74,46 @@ struct FormatDetectionTests {
         #expect(FileFormat.detect(header: srt, fileExtension: "srt") == .srt)
         #expect(FileFormat.detect(header: srt, fileExtension: "txt") == .txt)
         #expect(FileFormat.detect(header: Data([0x00, 0x01, 0x02]), fileExtension: "txt") == nil)
+    }
+
+    @Test func dataFormats() {
+        let xmlPlist = Data("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"x\">\n<plist version=\"1.0\"><dict/></plist>".utf8)
+        #expect(FileFormat.sniff(xmlPlist) == .plist)
+        #expect(FileFormat.sniff(Data("bplist00".utf8) + Data(count: 8)) == .plist)
+        #expect(FileFormat.sniff(Data("<?xml version=\"1.0\"?><rss/>".utf8)) == .xml)
+        #expect(FileFormat.sniff(Data("<?xml version=\"1.0\"?>\n<!DOCTYPE html><html/>".utf8)) == .html)
+        // Contents decide even when the extension disagrees.
+        #expect(FileFormat.detect(header: xmlPlist, fileExtension: "xml") == .plist)
+
+        let text = Data("a,b\n1,2\n".utf8)
+        #expect(FileFormat.detect(header: text, fileExtension: "csv") == .csv)
+        #expect(FileFormat.detect(header: text, fileExtension: "tsv") == .tsv)
+        #expect(FileFormat.detect(header: Data("{\"a\": 1}".utf8), fileExtension: "json") == .json)
+        #expect(FileFormat.detect(header: Data("<a/>".utf8), fileExtension: "xml") == .xml)
+        #expect(FileFormat.detect(header: Data("{a = 1;}".utf8), fileExtension: "plist") == .plist) // old-style text plist
+        #expect(FileFormat.detect(header: Data([0x00, 0x01]), fileExtension: "csv") == nil)
+        // Only written, so never offered as a source.
+        #expect(FileFormat.detect(header: Data("a: 1\n".utf8), fileExtension: "yaml") == nil)
+        #expect(FileFormat.sniff(Data("{\"a\": 1}".utf8)) == nil)
+    }
+
+    @Test func booksAndComicsAreRecognised() {
+        // An EPUB is known by its stored `mimetype` entry, whatever the file is called.
+        var epub = Data([0x50, 0x4B, 0x03, 0x04, 0x0A, 0x00] + [UInt8](repeating: 0, count: 20))
+        epub.append(contentsOf: [8, 0, 0, 0]) // name length 8, no extra field
+        epub.append(Data("mimetypeapplication/epub+zip".utf8))
+        #expect(epub.count == 58)
+        #expect(FileFormat.detect(header: epub, fileExtension: "zip") == .epub)
+        #expect(FileFormat.detect(header: epub, fileExtension: "") == .epub)
+        let zip = Data([0x50, 0x4B, 0x03, 0x04, 0x14, 0x00])
+        #expect(FileFormat.detect(header: zip, fileExtension: "cbz") == .cbz)
+        #expect(FileFormat.detect(header: zip, fileExtension: "CBR") == .cbr) // many CBRs are ZIPs
+        let rar = Data([0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00])
+        #expect(FileFormat.detect(header: rar, fileExtension: "cbr") == .cbr)
+        #expect(FileFormat.detect(header: rar, fileExtension: "rar") == .rar)
+        #expect(FileFormat.detect(header: Data("plain text".utf8), fileExtension: "cbz") == nil)
+        #expect(FileFormat.fromExtension("epub") == .epub)
+        #expect(FileFormat.epub.family == .document && FileFormat.cbz.family == .document)
     }
 
     @Test func extensionFallback() {
@@ -156,6 +196,36 @@ struct ConversionMatrixTests {
         #expect(!ConversionMatrix.canConvert(from: .srt, to: .txt))
     }
 
+    @Test func routesBooksAndComics() {
+        for target in [FileFormat.pdf, .html, .md, .txt, .docx, .rtf, .odt] {
+            #expect(ConversionMatrix.canConvert(from: .epub, to: target))
+        }
+        for source in [FileFormat.md, .html, .docx, .rtf, .odt, .txt] {
+            #expect(ConversionMatrix.canConvert(from: source, to: .epub))
+        }
+        #expect(ConversionMatrix.canConvert(from: .cbz, to: .pdf))
+        #expect(ConversionMatrix.canConvert(from: .cbr, to: .pdf))
+        #expect(ConversionMatrix.canConvert(from: .cbr, to: .cbz))
+        #expect(ConversionMatrix.canConvert(from: .pdf, to: .cbz))
+        #expect(!ConversionMatrix.canConvert(from: .cbz, to: .cbr))
+        #expect(!ConversionMatrix.canConvert(from: .cbz, to: .txt))
+        #expect(!ConversionMatrix.canConvert(from: .png, to: .cbz))
+        #expect(!ConversionMatrix.canConvert(from: .pdf, to: .epub))
+        #expect(!ConversionMatrix.canConvert(from: .epub, to: .cbz))
+        #expect(!ConversionMatrix.canConvert(from: .epub, to: .png))
+        #expect(!ConversionMatrix.canConvert(from: .zip, to: .epub))
+
+        let system = ConversionMatrix(writable: FileFormat.systemWritable())
+        #expect(!FileFormat.systemWritable().contains(.cbr))
+        #expect(system.targets(for: .pdf).contains(.cbz))
+        #expect(system.targets(for: .md).contains(.epub))
+        #expect(system.targets(for: .cbr) == [.pdf, .cbz])
+        #expect(system.possibleLosses(from: .epub, to: .pdf) == [.bookLayoutReflowed])
+        #expect(system.possibleLosses(from: .epub, to: .txt) == [.formattingRemoved])
+        #expect(system.possibleLosses(from: .md, to: .epub).isEmpty)
+        #expect(system.possibleLosses(from: .pdf, to: .cbz) == [.pagesBecamePictures])
+    }
+
     @Test func neverOffersFormatsThisMacCantWrite() {
         let system = ConversionMatrix(writable: FileFormat.systemWritable())
         #expect(!system.targets(for: .wav).contains(.mp3))
@@ -170,6 +240,27 @@ struct ConversionMatrixTests {
         #expect(matrix.possibleLosses(from: .wav, to: .m4a) == [.lossyAudio])
         #expect(matrix.possibleLosses(from: .wav, to: .flac).isEmpty)
         #expect(matrix.possibleLosses(from: .vtt, to: .srt) == [.subtitleStylingRemoved])
+    }
+
+    @Test func routesDataFormats() {
+        let system = ConversionMatrix(writable: FileFormat.systemWritable())
+        #expect(system.targets(for: .csv) == [.html, .md, .tsv, .json, .plist, .xml, .yaml, .xlsx])
+        #expect(system.targets(for: .xml).contains(.json))
+        #expect(system.targets(for: .plist).contains(.json))
+        #expect(system.targets(for: .yaml).isEmpty)
+        #expect(system.targets(for: .xlsx).isEmpty)
+        #expect(!ConversionMatrix.canConvert(from: .json, to: .pdf))
+        #expect(!ConversionMatrix.canConvert(from: .html, to: .csv))
+        #expect(!ConversionMatrix.canConvert(from: .json, to: .json))
+    }
+
+    @Test func warnsAboutDataLosses() {
+        #expect(matrix.possibleLosses(from: .json, to: .csv) == [.nestedDataFlattened])
+        #expect(matrix.possibleLosses(from: .csv, to: .json) == [.tableValuesTyped])
+        #expect(matrix.possibleLosses(from: .csv, to: .xlsx).isEmpty)
+        #expect(matrix.possibleLosses(from: .xml, to: .json) == [.xmlStructureMapped])
+        #expect(matrix.possibleLosses(from: .json, to: .plist) == [.nullsRemoved])
+        #expect(matrix.possibleLosses(from: .plist, to: .yaml) == [.datesAndDataAsText])
     }
 
     @Test func requestRoundTripsThroughTheWorkerProtocol() throws {

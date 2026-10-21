@@ -92,6 +92,18 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case contactFieldsLimited
     case tracksBecamePoints
     case trackTimesRemoved
+    case nestedDataFlattened
+    case tableValuesTyped
+    case xmlStructureMapped
+    case xmlNamesAdjusted
+    case datesAndDataAsText
+    case nullsRemoved
+    case cellsTruncated
+    // E-books and comics
+    case bookLayoutReflowed
+    case imagesDropped
+    case nonImagesSkipped
+    case pagesBecamePictures
 
     public var message: String {
         switch self {
@@ -117,6 +129,17 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .contactFieldsLimited: "Only names, organisation, emails, phones, addresses, birthday and note are kept."
         case .tracksBecamePoints: "Tracks and routes become one row per point."
         case .trackTimesRemoved: "Times are kept only for tracks where every point has one."
+        case .nestedDataFlattened: "Nested values became columns named like \"a.b\"; lists were written as JSON text in one cell."
+        case .tableValuesTyped: "The first row became the keys; numbers and true/false became typed values, empty cells null."
+        case .xmlStructureMapped: "Attributes became \"@name\" keys and text \"#text\"; values stay text, comments are dropped."
+        case .xmlNamesAdjusted: "Keys that aren't valid XML names were adjusted."
+        case .datesAndDataAsText: "Dates and binary data were written as text (ISO 8601 dates, Base64 data)."
+        case .nullsRemoved: "Property lists can't store empty (null) values, so those were left out."
+        case .cellsTruncated: "Cells longer than Excel's limit of 32,767 characters were shortened."
+        case .bookLayoutReflowed: "Page layout and the book's own styling are not kept; the text reflows."
+        case .imagesDropped: "Some pictures couldn't be found in the file and were left out."
+        case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
+        case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
         }
     }
 }
@@ -152,6 +175,7 @@ public struct ConversionMatrix: Sendable {
     /// Whether Ameya has an engine for this pair, regardless of what this Mac can encode.
     public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
         guard source != target else { return false }
+        if let route = bookRoute(from: source, to: target) { return route }
         switch (source.family, target.family) {
         case (.image, .image): return true
         case (.image, .document): return target == .pdf || target == .txt // text: decoded QR codes
@@ -159,13 +183,15 @@ public struct ConversionMatrix: Sendable {
         case (.document, .document):
             return source == .pdf ? target.isTextDocument : (target.isTextDocument || target == .pdf)
         case (.document, .image): return source == .pdf || (source == .txt && target == .png) // QR code
-        case (.contacts, .data): return true
+        case (.contacts, .data): return target == .csv || target == .json
         case (.data, .contacts): return source == .csv
         case (.geo, .geo): return target != .kmz
         case (.geo, .data): return target == .csv
         case (.audio, .audio), (.video, .video), (.video, .audio), (.subtitle, .subtitle): return true
         case (.video, .image): return target == .gif
         case (.archive, .archive): return target != .rar
+        case (.data, .data): return source.isDataSource
+        case (.data, .document): return source.isDataSource && (target == .html || target == .md)
         default: return false
         }
     }
@@ -173,6 +199,17 @@ public struct ConversionMatrix: Sendable {
     /// Whether a file can be rewritten in its own format with the given edits.
     public static func canEdit(_ format: FileFormat, options: ConversionOptions) -> Bool {
         options.text != nil && TextEdits.editableFormats.contains(format)
+    }
+
+    private static func dataLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
+        let tables: Set<FileFormat> = [.csv, .tsv, .xlsx, .html, .md]
+        var notes: [ConversionNote] = []
+        if source == .xml { notes.append(.xmlStructureMapped) }
+        if source == .plist { notes.append(.datesAndDataAsText) }
+        if tables.contains(source) && !tables.contains(target) { notes.append(.tableValuesTyped) }
+        if !tables.contains(source) && tables.contains(target) { notes.append(.nestedDataFlattened) }
+        if target == .plist { notes.append(.nullsRemoved) }
+        return notes
     }
 
     /// Targets every one of the given sources can be converted to.
@@ -186,6 +223,7 @@ public struct ConversionMatrix: Sendable {
 
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
+        if let notes = Self.bookLosses(from: source, to: target) { return notes }
         switch (source.family, target.family) {
         case (.document, .image) where source == .txt:
             return [.madeQRCode]
@@ -215,6 +253,8 @@ public struct ConversionMatrix: Sendable {
             return source == .vtt ? [.subtitleStylingRemoved] : []
         case (.image, .video):
             return [.transparencyFilledWhite]
+        case (.data, _):
+            return Self.dataLosses(from: source, to: target)
         case (.image, _), (.document, .image):
             break // image rules below
         default:

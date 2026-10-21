@@ -36,6 +36,14 @@ enum SelfTest {
             }
             await check.convert(text, from: .txt, to: .html)
 
+            let markdown = directory.appendingPathComponent("book.md")
+            try Data("# Book\n\nOpening.\n\n## One\n\nFirst chapter.\n\n## Two\n\nSecond chapter.\n".utf8).write(to: markdown)
+            if let epub = await check.convert(markdown, from: .md, to: .epub),
+               let pdf = await check.convert(epub, from: .epub, to: .pdf),
+               let cbz = await check.convert(pdf, from: .pdf, to: .cbz) {
+                await check.convert(cbz, from: .cbz, to: .pdf)
+            }
+
             let wav = directory.appendingPathComponent("tone.wav")
             try writeTone(to: wav)
             for target in [FileFormat.m4a, .alac, .flac, .aiff] {
@@ -51,6 +59,13 @@ enum SelfTest {
             let srt = directory.appendingPathComponent("captions.srt")
             try Data("1\n00:00:01,000 --> 00:00:02,500\nHello\n".utf8).write(to: srt)
             await check.convert(srt, from: .srt, to: .vtt)
+
+            let csv = directory.appendingPathComponent("people.csv")
+            try Data("name,age,note\nZoë,42,\"says \"\"hi\"\", twice\"\nBob,7,\n".utf8).write(to: csv)
+            if let json = await check.convert(csv, from: .csv, to: .json) {
+                await check.convert(json, from: .json, to: .plist)
+            }
+            await check.convert(csv, from: .csv, to: .xlsx)
 
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
@@ -78,8 +93,11 @@ enum SelfTest {
                     input: input, destination: destination,
                     request: ConversionRequest(source: source, target: target)
                 )
-                let expected = target == .alac ? FileFormat.m4a : target
-                let detected = FileFormat.detect(at: destination)
+                // XLSX is a ZIP package Ameya writes but never reads back, so check it as a ZIP.
+                let expected = target == .alac ? FileFormat.m4a : target == .xlsx ? .zip : target
+                let detected = target == .xlsx
+                    ? FileFormat.detect(header: (try? Data(contentsOf: destination)) ?? Data(), fileExtension: "zip")
+                    : FileFormat.detect(at: destination)
                 guard detected == expected, result.outputBytes > 0 else {
                     print("FAIL \(label): output detected as \(detected?.rawValue ?? "unknown")")
                     allPassed = false

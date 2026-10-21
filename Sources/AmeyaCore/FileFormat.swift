@@ -10,6 +10,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case raw, jxl, dicom, hdr, sgi
     // Documents
     case pdf, txt, rtf, html, docx, doc, odt, md
+    // E-books and comic archives (document family). CBR can only be read.
+    case epub, cbz, cbr
     // Audio. `alac` is Apple Lossless in an .m4a file; it is only ever a target.
     case mp3, m4a, alac, wav, aiff, caf, flac
     // Video
@@ -18,13 +20,15 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case srt, vtt
     // Archives. RAR can only be read.
     case zip, tar, tgz, tbz2, txz, sevenZip = "7z", rar
-    // Contacts, GPS tracks (KMZ can only be read) and tabular data
-    case vcf, gpx, kml, kmz, geojson, csv, json
+    // Data. YAML and XLSX can only be written.
+    case csv, tsv, json, plist, xml, yaml, xlsx
+    // Contacts and GPS tracks. KMZ can only be read.
+    case vcf, gpx, kml, kmz, geojson
 
     public var id: String { rawValue }
 
     public enum Family: String, Codable, Sendable {
-        case image, document, audio, video, subtitle, archive, contacts, geo, data
+        case image, document, audio, video, subtitle, archive, data, contacts, geo
 
         /// How long one job may run before it is stopped.
         public var timeout: Duration {
@@ -35,7 +39,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             case .video: .seconds(3600)
             case .subtitle: .seconds(30)
             case .archive: .seconds(1800)
-            case .contacts, .geo, .data: .seconds(120)
+            case .data: .seconds(300)
+            case .contacts, .geo: .seconds(120)
             }
         }
     }
@@ -45,14 +50,14 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .jpeg, .png, .heic, .avif, .webp, .tiff, .bmp, .gif,
              .heics, .jp2, .psd, .exr, .tga, .pbm, .ktx, .ktx2, .astc, .ico, .icns,
              .raw, .jxl, .dicom, .hdr, .sgi: .image
-        case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md: .document
+        case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md, .epub, .cbz, .cbr: .document
         case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
         case .mp4, .mov, .m4v: .video
         case .srt, .vtt: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
+        case .csv, .tsv, .json, .plist, .xml, .yaml, .xlsx: .data
         case .vcf: .contacts
         case .gpx, .kml, .kmz, .geojson: .geo
-        case .csv, .json: .data
         }
     }
 
@@ -90,6 +95,9 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .doc: "Word 97 (DOC)"
         case .odt: "OpenDocument"
         case .md: "Markdown"
+        case .epub: "EPUB"
+        case .cbz: "Comic book (CBZ)"
+        case .cbr: "Comic book (CBR)"
         case .mp3: "MP3"
         case .m4a: "AAC (M4A)"
         case .alac: "Apple Lossless"
@@ -109,13 +117,18 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .txz: "TAR.XZ"
         case .sevenZip: "7-Zip"
         case .rar: "RAR"
+        case .csv: "CSV"
+        case .tsv: "TSV"
+        case .json: "JSON"
+        case .plist: "Property List"
+        case .xml: "XML"
+        case .yaml: "YAML"
+        case .xlsx: "Excel (XLSX)"
         case .vcf: "vCard"
         case .gpx: "GPX"
         case .kml: "KML"
         case .kmz: "KMZ"
         case .geojson: "GeoJSON"
-        case .csv: "CSV"
-        case .json: "JSON"
         }
     }
 
@@ -154,6 +167,9 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .doc: "com.microsoft.word.doc"
         case .odt: "org.oasis-open.opendocument.text"
         case .md: "net.daringfireball.markdown"
+        case .epub: "org.idpf.epub-container"
+        case .cbz: "public.cbz-archive"
+        case .cbr: "public.cbr-archive"
         case .mp3: "public.mp3"
         case .m4a, .alac: "com.apple.m4a-audio"
         case .wav: "com.microsoft.waveform-audio"
@@ -172,13 +188,18 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .txz: "org.tukaani.tar-xz-archive"
         case .sevenZip: "org.7-zip.7-zip-archive"
         case .rar: "com.rarlab.rar-archive"
+        case .csv: "public.comma-separated-values-text"
+        case .tsv: "public.tab-separated-values-text"
+        case .json: "public.json"
+        case .plist: "com.apple.property-list"
+        case .xml: "public.xml"
+        case .yaml: "public.yaml"
+        case .xlsx: "org.openxmlformats.spreadsheetml.sheet"
         case .vcf: "public.vcard"
         case .gpx: "com.topografix.gpx"
         case .kml: "com.google.earth.kml"
         case .kmz: "com.google.earth.kmz"
         case .geojson: "public.geojson"
-        case .csv: "public.comma-separated-values-text"
-        case .json: "public.json"
         }
     }
 
@@ -210,6 +231,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .tbz2: ["tbz2", "tbz", "bz2"]
         case .txz: ["txz", "xz"]
         case .vcf: ["vcf", "vcard"]
+        case .tsv: ["tsv", "tab"]
+        case .yaml: ["yaml", "yml"]
         default: [rawValue]
         }
     }
@@ -266,6 +289,14 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         }
     }
 
+    /// Data formats Ameya can read. YAML and XLSX are written only.
+    public var isDataSource: Bool {
+        switch self {
+        case .csv, .tsv, .json, .plist, .xml: true
+        default: false
+        }
+    }
+
     /// Formats this Mac can write. Image formats are whatever ImageIO can encode;
     /// the rest are provided by Ameya's own engines.
     public static func systemWritable() -> Set<FileFormat> {
@@ -273,7 +304,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         return Set(allCases.filter { format in
             switch format {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
-            case .rar: false // proprietary; extraction only
+            case .rar, .cbr: false // proprietary; extraction only
             case .kmz: false // read only
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true

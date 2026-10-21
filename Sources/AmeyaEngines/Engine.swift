@@ -23,6 +23,10 @@ public enum Engine {
         var frames = 1
 
         switch (source.family, target.family) {
+        case _ where source.isBookOrComic || target.isBookOrComic:
+            (notes, frames) = try BookConverter.convert(input: input, from: source, to: target, output: output,
+                                                        options: request.options, progress: progress)
+
         case (.image, .image), (.image, .document), (.document, .image):
             let (data, result) = try ImageConverter.convert(try read(input), request: request, progress: progress)
             try data.write(to: output)
@@ -57,6 +61,10 @@ public enum Engine {
             let (data, subtitleNotes) = try SubtitleConverter.convert(try read(input), from: source, to: target)
             try data.write(to: output)
             notes = subtitleNotes
+            progress(1)
+
+        case (.data, .data), (.data, .document):
+            notes = try DataConverter.convert(input: input, from: source, to: target, output: output)
             progress(1)
 
         default:
