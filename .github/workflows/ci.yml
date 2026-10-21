@@ -40,7 +40,8 @@ jobs:
             spm-${{ runner.os }}-${{ steps.toolchain.outputs.id }}-${{ hashFiles('Package.swift') }}-
 
       # The LGPL FFmpeg helper takes a while to build, so it is cached (with the exact source
-      # tarballs it was built from) until the script changes. release.yml uses the same key.
+      # tarballs it was built from) until the script changes. CI only: release.yml never reads this cache
+      # (pull requests can write it), and the "ci-" prefix keeps its keys apart from any release key.
       - name: Cache FFmpeg helper
         id: ffmpeg-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -48,7 +49,7 @@ jobs:
           path: |
             .build-deps/ffmpeg/bin
             .build-deps/sources
-          key: ameya-ffmpeg-${{ runner.os }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+          key: ci-ameya-ffmpeg-${{ runner.os }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
 
       - name: Build FFmpeg helper (LGPL)
         if: steps.ffmpeg-cache.outputs.cache-hit != 'true'

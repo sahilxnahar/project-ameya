@@ -27,6 +27,30 @@ Ameya is ad-hoc signed and **not notarized yet**, so macOS will block the first 
 
 You only need to do this once. `SHA256SUMS.txt` on each release lets you check the download.
 
+### Verify your download
+
+`SHA256SUMS.txt` on each release lets you check the file is intact:
+
+```sh
+shasum -a 256 -c SHA256SUMS.txt --ignore-missing
+```
+
+Each release zip and source bundle also carries a signed build-provenance attestation, which shows
+which commit and GitHub Actions workflow built it. With the [GitHub CLI](https://cli.github.com/):
+
+```sh
+gh attestation verify Ameya-<version>.zip --repo sahilxnahar/project-ameya
+```
+
+Releases are built from source on a pinned GitHub runner (the FFmpeg helper is always built fresh,
+never from a cache) and are published by hand after review.
+
+### TODO: Developer ID signing and notarization
+
+Ameya is only ad-hoc signed today. Signing with a Developer ID certificate and notarizing with Apple
+needs a paid Apple Developer account, which the project doesn't have yet. Until then the first-launch
+steps above are required, and the attestation and checksums are the way to check a download.
+
 ## Private by design
 
 **Ameya never uses the network — enforced by tests.** The app and its worker have no network
