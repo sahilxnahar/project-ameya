@@ -5,6 +5,8 @@ Everything happens on your Mac: no account, no uploads, no limits.
 
 > **Status: early development.** Plenty already works (see below), but expect rough edges.
 
+> **Taking over this project?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): decisions, architecture, open branches and what's left.
+
 ## What it converts
 
 Images (HEIC, WebP, AVIF, RAW, SVG and more), PDFs, Word/RTF/ODT/HTML documents, Markdown, e-books
