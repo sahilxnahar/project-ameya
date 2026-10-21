@@ -25,7 +25,7 @@ enum QRCode {
             case .tooLong(let bytes):
                 "The text is too long for a QR code (\(bytes) bytes; the limit is \(QRCode.maxBytes) with high error correction)."
             case .empty: "The text file is empty, so there is nothing to put in a QR code."
-            case .noCodes: "No QR codes or barcodes were found in this image."
+            case .noCodes: "No QR codes or barcodes were found in this image. To copy its words, use “Copy text from image” under Tools."
             }
         }
     }

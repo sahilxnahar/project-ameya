@@ -89,8 +89,9 @@ public enum PDFTools {
         case .compress:
             throw ConversionError.notAvailableYet("Making PDFs smaller")
 
-        case .ocr:
-            throw ConversionError.notAvailableYet("Making scanned PDFs searchable")
+        case .ocr, .addPageNumbers, .watermark, .protect, .removePassword:
+            // Text recognition, stamps and passwords (PDFToolbox.swift).
+            return try PDFToolbox.run(action, inputs: inputs, request: request, scratch: scratch, progress: progress)
         }
 
         let output = try save(document, as: "output.pdf", in: scratch)

@@ -19,12 +19,18 @@ public enum ConversionError: Error, Equatable, LocalizedError {
     case dataLimit(String)
     /// A tool that exists in the request format but has no engine yet, e.g. "Making PDFs smaller".
     case notAvailableYet(String)
+    /// The password given for a PDF doesn't open it.
+    case wrongPassword
+    /// The tool can't or needn't run on this file; the message says why in full.
+    case refused(String)
 
     public var errorDescription: String? {
         switch self {
         case .notAvailableYet(let feature): "\(feature) isn't available yet."
         case .unsupportedConversion(let from, let to): "Ameya can't convert \(from.displayName) to \(to.displayName) yet."
-        case .noText: "This PDF has no selectable text. (It may be a scan; text recognition is coming.)"
+        case .noText: "No text was found, and none could be recognised in the pages or pictures."
+        case .wrongPassword: "That password isn't right for this PDF."
+        case .refused(let reason): reason
         case .noAudioTrack: "This file has no sound to convert."
         case .noVideoTrack: "This file has no video."
         case .noSubtitles: "No subtitles were found in this file."

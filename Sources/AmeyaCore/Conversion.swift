@@ -26,6 +26,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var subtitleFrameRate: Double?
     /// Re-encodes a text file in place (same format in and out), e.g. to fix its encoding.
     public var text: TextEdits?
+    /// Set by `WorkerSecret`: the PDF password follows on stdin, ahead of the file.
+    public var secretOnStdin: Bool? = nil
 
     public var hasEdits: Bool {
         (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil
@@ -150,6 +152,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case metadataRemoved
     case resized
     case targetSizeNotReached
+    // PDF toolbox and text recognition
+    case scannedPagesMadeSearchable
+    case textRecognisedFromScans
+    case textRecognisedInPicture
+    case keepPasswordSafe
 
     public var message: String {
         switch self {
@@ -198,6 +205,10 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .metadataRemoved: "Camera details, location and other hidden information were removed."
         case .resized: "The picture was made smaller."
         case .targetSizeNotReached: "It couldn't be made quite that small; this is the smallest version Ameya could make."
+        case .scannedPagesMadeSearchable: "Text was recognised on the scanned pages; check names and numbers."
+        case .textRecognisedFromScans: "Text was recognised from scanned pages; check names and numbers."
+        case .textRecognisedInPicture: "The text was recognised on this Mac; check names and numbers."
+        case .keepPasswordSafe: "Keep the password somewhere safe: Ameya can't recover a forgotten one."
         }
     }
 }
@@ -255,7 +266,9 @@ public struct ConversionMatrix: Sendable {
         if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
         case (.image, .image): return true
-        case (.image, .document): return target == .pdf || target == .txt // text: decoded QR codes
+        case (.image, .document):
+            // Text: decoded QR codes. Word and Markdown: recognised text (OCR), as in "JPG to Word".
+            return target == .pdf || target == .txt || (source.isRecognisableImage && (target == .docx || target == .md))
         case (.image, .video): return source == .gif
         case (.document, .document):
             return source == .pdf ? target.isTextDocument : (target.isTextDocument || target == .pdf)
@@ -313,6 +326,8 @@ public struct ConversionMatrix: Sendable {
             return [.madeQRCode]
         case (.image, .document) where target == .txt:
             return [.onlyCodesRead]
+        case (.image, .document) where target == .docx || target == .md:
+            return [.textRecognisedInPicture]
         case (.contacts, _):
             return [.contactFieldsLimited]
         case (.geo, .data):

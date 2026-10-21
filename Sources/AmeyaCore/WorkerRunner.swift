@@ -116,6 +116,12 @@ public struct WorkerRunner: Sendable {
             inputHandle = try FileHandle(forReadingFrom: tar)
         }
         defer { try? inputHandle.close() }
+        // A password travels ahead of the file on stdin, never on the command line (WorkerSecret).
+        var workerStdin = inputHandle
+        if let secret = WorkerSecret.extract(from: &request) {
+            workerStdin = try WorkerSecret.stdin(prefixing: secret, to: inputHandle)
+        }
+        defer { if workerStdin !== inputHandle { try? workerStdin.close() } }
 
         let partial = destination.deletingLastPathComponent()
             .appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).partial")
@@ -137,7 +143,7 @@ public struct WorkerRunner: Sendable {
         let job = WorkerProcess(executable: executable, progress: progress)
         let result = try await job.run(
             arguments: [WorkerProtocol.requestArgument, try WorkerProtocol.encode(request)],
-            stdin: inputHandle,
+            stdin: workerStdin,
             stdout: outputHandle,
             timeout: timeout
         )

@@ -63,7 +63,7 @@ struct ToolCatalog {
     let tools: [Tool]
 
     init(writable: Set<FileFormat>) {
-        tools = Self.imageTools(writable: writable) + Self.pdfTools()
+        tools = Self.imageTools(writable: writable) + Self.pdfTools() + Self.pdfToolbox()
     }
 
     /// Tools offered for these files, in catalog order.
@@ -141,6 +141,61 @@ struct ToolCatalog {
                  help: "Makes a copy with every page turned a quarter turn to the right.",
                  outputSuffix: "(rotated)", isAvailable: allPDF,
                  makeRequest: pdf(.rotate(degrees: 90, pages: nil))),
+        ]
+    }
+
+    // MARK: PDF toolbox and text recognition (panels in PDFPagePanels.swift and PDFToolPanels.swift)
+
+    static func pdfToolbox() -> [Tool] {
+        let allPDF: ([FileFormat]) -> Bool = { $0.allSatisfy { $0 == .pdf } }
+        let onePDF: ([FileFormat]) -> Bool = { $0 == [.pdf] }
+        func pdf(_ action: PDFAction) -> (FileFormat) -> ConversionRequest {
+            { format in ConversionRequest(source: format, target: .pdf, options: ConversionOptions(pdf: action)) }
+        }
+        func panel<Content: View>(_ content: @escaping @MainActor (@escaping (PDFAction) -> Void) -> Content) -> Tool.Panel {
+            { _, done in AnyView(content { action in done(ConversionOptions(pdf: action)) }) }
+        }
+
+        return [
+            Tool(id: "pdf.searchable", title: "Make PDF searchable", systemImage: "text.viewfinder",
+                 help: "Recognises the words on scanned pages so you can search, select and copy them. Pages that already have text stay as they are.",
+                 outputSuffix: "(searchable)", isAvailable: allPDF,
+                 makeRequest: pdf(.ocr(languages: nil))),
+            Tool(id: "image.copyText", title: "Copy text from image", systemImage: "doc.text.viewfinder",
+                 help: "Recognises the words in the picture and saves them as a text file.",
+                 outputSuffix: "(text)",
+                 isAvailable: { formats in formats.allSatisfy { $0.family == .image && !$0.isIcon } },
+                 makeRequest: { format in
+                     ConversionRequest(source: format, target: .txt, options: ConversionOptions(pdf: .ocr(languages: nil)))
+                 }),
+            Tool(id: "pdf.removePages", title: "Remove pages…", systemImage: "doc.badge.ellipsis",
+                 help: "Choose pages to leave out of a copy of this PDF.",
+                 outputSuffix: "(fewer pages)", isAvailable: onePDF, makeRequest: pdf(.deletePages([])),
+                 panel: panel { done in PageGridPanel(mode: .remove, finish: done) }),
+            Tool(id: "pdf.reorderPages", title: "Reorder pages…", systemImage: "arrow.up.arrow.down.square",
+                 help: "Put the pages of this PDF in a new order.",
+                 outputSuffix: "(reordered)", isAvailable: onePDF, makeRequest: pdf(.reorder([])),
+                 panel: panel { done in PageGridPanel(mode: .reorder, finish: done) }),
+            Tool(id: "pdf.extractPages", title: "Extract pages…", systemImage: "doc.on.clipboard",
+                 help: "Makes a new PDF from the pages you choose, such as 1-3, 7.",
+                 outputSuffix: "(extract)", isAvailable: onePDF, makeRequest: pdf(.reorder([])),
+                 panel: panel { done in ExtractPagesPanel(finish: done) }),
+            Tool(id: "pdf.pageNumbers", title: "Add page numbers…", systemImage: "number",
+                 help: "Adds small page numbers at the bottom centre of every page.",
+                 outputSuffix: "(numbered)", isAvailable: allPDF, makeRequest: pdf(.addPageNumbers(.number)),
+                 panel: panel { done in PageNumbersPanel(finish: done) }),
+            Tool(id: "pdf.watermark", title: "Watermark…", systemImage: "seal",
+                 help: "Writes faint diagonal text, such as CONFIDENTIAL, across every page.",
+                 outputSuffix: "(watermarked)", isAvailable: allPDF, makeRequest: pdf(.watermark(text: "", opacity: 0.25)),
+                 panel: panel { done in WatermarkPanel(finish: done) }),
+            Tool(id: "pdf.protect", title: "Password-protect PDF…", systemImage: "lock.doc",
+                 help: "Makes a copy that needs a password to open.",
+                 outputSuffix: "(protected)", isAvailable: allPDF, makeRequest: pdf(.protect(password: "")),
+                 panel: panel { done in PasswordPanel(mode: .protect, finish: done) }),
+            Tool(id: "pdf.removePassword", title: "Remove password…", systemImage: "lock.open",
+                 help: "Makes a copy that opens without a password. You need the current password.",
+                 outputSuffix: "(unlocked)", isAvailable: allPDF, makeRequest: pdf(.removePassword(password: "")),
+                 panel: panel { done in PasswordPanel(mode: .remove, finish: done) }),
         ]
     }
 }
