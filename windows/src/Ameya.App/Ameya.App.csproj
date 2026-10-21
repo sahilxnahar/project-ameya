@@ -18,6 +18,9 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <!-- Program.cs has its own Main, so the self-test option runs before any XAML starts. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+    <!-- The MSIX declares its Windows App SDK runtime dependency, so the start-up deployment check
+         isn't needed; without it, the self-test also runs from a plain build folder. -->
+    <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
     <SelfContained Condition="'$(AmeyaSelfContained)' == 'true'">true</SelfContained>
     <!-- CI signs the package with a throwaway certificate; no key is ever committed. -->
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
