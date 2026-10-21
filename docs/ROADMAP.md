@@ -196,10 +196,12 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
 | Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
+| E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
+| Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
-Not yet: MP3 output, WebP output, EPUB, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
+Not yet: MP3 output, WebP output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.

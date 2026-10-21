@@ -6,7 +6,7 @@ extension FileFormat {
 
     /// ZIP-based formats that are not plain archives; these are never offered ZIP conversions.
     static let zipBasedDocuments: Set<String> = [
-        "xlsx", "pptx", "epub", "jar", "apk", "ipa", "pages", "numbers", "key", "odp", "ods",
+        "xlsx", "pptx", "jar", "apk", "ipa", "pages", "numbers", "key", "odp", "ods",
         "sketch", "xpi", "whl", "nupkg", "vsix", "aar", "kmz", "3mf", "usdz",
     ]
 
@@ -28,6 +28,7 @@ extension FileFormat {
         // Containers whose first bytes don't say what's inside.
         if bytes.starts(with: [0x50, 0x4B, 0x03, 0x04]) || bytes.starts(with: [0x50, 0x4B, 0x05, 0x06]) { // ZIP
             if let byExtension, [.docx, .odt].contains(byExtension) { return byExtension }
+            if let book = detectBook(bytes: bytes, fileExtension: fileExtension, isZip: true) { return book }
             return zipBasedDocuments.contains(fileExtension.lowercased()) ? nil : .zip
         }
         if bytes.starts(with: [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) { // OLE compound file
@@ -42,6 +43,8 @@ extension FileFormat {
             }
             // Most camera RAW files are TIFF underneath.
             if sniffed == .tiff, byExtension == .raw { return .raw }
+            // A comic book in a RAR (or, rarely, a CBZ that is really a RAR).
+            if sniffed == .rar, let comic = detectBook(bytes: bytes, fileExtension: fileExtension, isZip: false) { return comic }
             return sniffed
         }
 

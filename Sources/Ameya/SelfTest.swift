@@ -36,6 +36,14 @@ enum SelfTest {
             }
             await check.convert(text, from: .txt, to: .html)
 
+            let markdown = directory.appendingPathComponent("book.md")
+            try Data("# Book\n\nOpening.\n\n## One\n\nFirst chapter.\n\n## Two\n\nSecond chapter.\n".utf8).write(to: markdown)
+            if let epub = await check.convert(markdown, from: .md, to: .epub),
+               let pdf = await check.convert(epub, from: .epub, to: .pdf),
+               let cbz = await check.convert(pdf, from: .pdf, to: .cbz) {
+                await check.convert(cbz, from: .cbz, to: .pdf)
+            }
+
             let wav = directory.appendingPathComponent("tone.wav")
             try writeTone(to: wav)
             for target in [FileFormat.m4a, .alac, .flac, .aiff] {
