@@ -27,11 +27,23 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 cp "$BIN/Ameya" "$APP/Contents/MacOS/Ameya"
 cp "$BIN/AmeyaWorker" "$APP/Contents/MacOS/AmeyaWorker"
+# The LGPL FFmpeg helper (scripts/build-ffmpeg.sh). Without it, Ogg/Opus/MP3-out/MKV/WebM/AVI aren't offered.
+FFMPEG="$ROOT/.build-deps/ffmpeg/bin/ameya-ffmpeg"
+if [ -x "$FFMPEG" ]; then
+    cp "$FFMPEG" "$APP/Contents/MacOS/ameya-ffmpeg"
+    cp "$ROOT/THIRD_PARTY_NOTICES.md" "$ROOT/LICENSES/LGPL-2.1.txt" "$APP/Contents/Resources/"
+else
+    echo "note: $FFMPEG not found; building without the FFmpeg formats (run scripts/build-ffmpeg.sh)"
+fi
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
-# Sign inside-out: the worker first, then the app. "-" is an ad-hoc signature.
+# Sign inside-out: the FFmpeg helper and the worker first, then the app. "-" is an ad-hoc signature.
 # Replace with a Developer ID identity once the project has one.
 IDENTITY="${CODESIGN_IDENTITY:--}"
+if [ -f "$APP/Contents/MacOS/ameya-ffmpeg" ]; then
+    codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
+        --entitlements "$ROOT/Resources/AmeyaWorker.entitlements" "$APP/Contents/MacOS/ameya-ffmpeg"
+fi
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \
     --entitlements "$ROOT/Resources/AmeyaWorker.entitlements" "$APP/Contents/MacOS/AmeyaWorker"
 codesign --force --options runtime --timestamp=none --sign "$IDENTITY" \

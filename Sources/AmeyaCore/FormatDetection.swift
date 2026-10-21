@@ -38,7 +38,7 @@ extension FileFormat {
 
         if let sniffed = sniff(header) {
             // ISO media files share brands loosely; trust a matching extension within the group.
-            let isoMedia: Set<FileFormat> = [.mp4, .mov, .m4v, .m4a]
+            let isoMedia: Set<FileFormat> = [.mp4, .mov, .m4v, .m4a, .threegp]
             if isoMedia.contains(sniffed), let byExtension, isoMedia.contains(byExtension) {
                 return byExtension
             }
@@ -48,6 +48,8 @@ extension FileFormat {
             if sniffed == .rar, let comic = detectBook(bytes: bytes, fileExtension: fileExtension, isZip: false) { return comic }
             // Compressed SVG (.svgz) is plain gzip; only the extension says what's inside.
             if sniffed == .tgz, byExtension == .svg { return .svg }
+            // A VobSub .sub is MPEG-PS holding only subtitle pictures, not a video Ameya can read.
+            if sniffed == .mpg, fileExtension.lowercased() == "sub" { return nil }
             return sniffed
         }
         // An SVG whose root element sits past the header (e.g. after a long comment).
@@ -141,6 +143,13 @@ extension FileFormat {
             return .xml
         }
 
+        // MPEG-TS: a 0x47 sync byte every 188 bytes; Blu-ray M2TS adds a 4-byte prefix to each packet.
+        for (offset, stride) in [(0, 188), (4, 192)] where bytes.count > offset + 2 * stride {
+            if bytes[offset] == 0x47 && bytes[offset + stride] == 0x47 && bytes[offset + 2 * stride] == 0x47 {
+                return .ts
+            }
+        }
+
         // Audio
         if starts("ID3") { return .mp3 }
         if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] & 0xE0 == 0xE0, bytes[1] & 0x06 != 0 {
@@ -150,6 +159,20 @@ extension FileFormat {
         if starts("FORM") && (starts("AIFF", at: 8) || starts("AIFC", at: 8)) { return .aiff }
         if starts("fLaC") { return .flac }
         if starts("caff") { return .caf }
+        if starts("OggS") { return starts("OpusHead", at: 28) ? .opus : .ogg }
+
+        // Video containers
+        if starts([0x1A, 0x45, 0xDF, 0xA3]) { // Matroska EBML header; the DocType says WebM or Matroska
+            let head = Array(bytes.prefix(64)), webm = Array("webm".utf8)
+            let isWebM = head.count >= 4 && (0...head.count - 4).contains { Array(head[$0..<$0 + 4]) == webm }
+            return isWebM ? .webm : .mkv
+        }
+        if starts("RIFF") && starts("AVI ", at: 8) { return .avi }
+        if starts("FLV") && bytes.count >= 4 && bytes[3] == 1 { return .flv }
+        if starts([0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11, 0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C]) {
+            return .wmv // ASF header object
+        }
+        if starts([0x00, 0x00, 0x01, 0xBA]) || starts([0x00, 0x00, 0x01, 0xB3]) { return .mpg } // program stream / MPEG video
 
         // Archives
         if starts([0x1F, 0x8B]) { return .tgz }
@@ -176,8 +199,10 @@ extension FileFormat {
             case "M4A ", "M4B ", "M4P ": return .m4a
             case "M4V ", "M4VH", "M4VP": return .m4v
             case "qt  ": return .mov
-            case "isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "dash", "MSNV", "3gp4", "3gp5", "3g2a":
+            case "isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1", "dash", "MSNV":
                 return .mp4
+            case let brand where brand.hasPrefix("3gp") || brand.hasPrefix("3g2"):
+                return .threegp
             default: return nil
             }
         }

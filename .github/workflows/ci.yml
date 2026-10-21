@@ -12,7 +12,7 @@ concurrency:
 jobs:
   build-and-test:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
@@ -22,11 +22,27 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # The LGPL FFmpeg helper takes a while to build, so it is cached until the script changes.
+      - name: Cache FFmpeg helper
+        id: ffmpeg-cache
+        uses: actions/cache@v4
+        with:
+          path: .build-deps/ffmpeg/bin
+          key: ameya-ffmpeg-${{ runner.os }}-${{ hashFiles('scripts/build-ffmpeg.sh') }}
+
+      - name: Build FFmpeg helper (LGPL)
+        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        run: |
+          command -v pkg-config || brew install pkgconf
+          ./scripts/build-ffmpeg.sh
+
       - name: Build
         run: swift build
 
       - name: Test
         run: swift test
+        env:
+          AMEYA_FFMPEG: ${{ github.workspace }}/.build-deps/ffmpeg/bin/ameya-ffmpeg
 
       - name: Build app bundle (universal)
         run: ./scripts/build-app.sh

@@ -195,6 +195,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Documents | TXT, RTF, HTML, DOCX, DOC, ODT ↔ each other, and → PDF (A4) | Tables, lists and images laid out by the system text engine |
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
+| Audio + video (FFmpeg) | Ogg Vorbis, Opus, MKV, WebM, AVI in and out; MP3 out; FLV, WMV, MPEG-TS, MPEG in; sound from any video → MP3/Ogg/Opus | Bundled LGPL FFmpeg helper, a separate process; streams copied when the target accepts them. See THIRD_PARTY_NOTICES.md |
 | Subtitles | SRT, WebVTT, ASS/SSA, SBV, TTML/DFXP, LRC, MicroDVD (.sub), SAMI ↔ each other; time shift option | Bold/italic/underline kept; positions, colours and fonts dropped (with a warning). LRC keeps start times only; MicroDVD assumes 23.976 fps unless the file says |
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
 | E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
@@ -211,7 +212,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
-Not yet: MP3 output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
+Not yet: reading YAML and XLSX, extracting archives to a folder, AV1 decoding, standalone AMR files.
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.

@@ -53,6 +53,12 @@ public enum Engine {
         case _ where target.isCompression || target == .decompressed:
             notes = try SingleFileCompression.convert(input: input, from: source, to: target, output: output, progress: progress)
 
+        case _ where source.isFFmpegOnly || target.isFFmpegTarget:
+            // Ogg, Opus, MP3 output, MKV, WebM, AVI…: the bundled LGPL FFmpeg helper.
+            guard let helper = FFmpegAvailability.helperURL else { throw ConversionError.unsupportedConversion(from: source, to: target) }
+            try await FFmpegConverter.convert(input: input, to: target, output: output, helper: helper, progress: progress)
+            notes = ConversionMatrix(writable: [target]).possibleLosses(from: source, to: target)
+
         case _ where EverydayConverter.handles(source, target, options: request.options):
             notes = try EverydayConverter.convert(input: input, from: source, request: request, output: output, progress: progress)
 

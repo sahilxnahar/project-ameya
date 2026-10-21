@@ -236,9 +236,22 @@ public struct ConversionMatrix: Sendable {
 
     /// Whether Ameya has an engine for this pair, regardless of what this Mac can encode.
     public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
-        guard source != target else { return false }
+        canConvert(from: source, to: target, ffmpeg: FFmpegAvailability.isAvailable)
+    }
+
+    /// - Parameter ffmpeg: whether the bundled FFmpeg helper is present. Ogg, Opus, MKV, WebM, AVI,
+    ///   FLV, WMV, MPEG-TS and MPEG sources, and MP3/Ogg/Opus/MKV/WebM/AVI targets, need it.
+    public static func canConvert(from source: FileFormat, to target: FileFormat, ffmpeg: Bool) -> Bool {
+        guard source != target, !target.isReadOnlyMedia else { return false }
         if let route = quickWinRoute(from: source, to: target) { return route }
         if let route = bookRoute(from: source, to: target) { return route }
+        if source.isFFmpegOnly || target.isFFmpegTarget {
+            guard ffmpeg else { return false }
+            switch (source.family, target.family) {
+            case (.audio, .audio), (.video, .video), (.video, .audio): return true
+            default: return false
+            }
+        }
         if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
         case (.image, .image): return true

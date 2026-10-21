@@ -5,3 +5,4 @@ dist/
 DerivedData/
 .DS_Store
 .claude/worktrees/
+.build-deps/
