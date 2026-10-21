@@ -1,0 +1,208 @@
+name: Windows FFmpeg helper
+
+# Builds the LGPL ameya-ffmpeg.exe for Windows x64 and arm64 (cross-compiled with llvm-mingw on
+# Linux, see scripts/build-ffmpeg-windows.sh), then checks and smoke-tests each binary on a real
+# Windows runner of the same architecture.
+
+on:
+  push:
+    paths:
+      - scripts/build-ffmpeg-windows.sh
+      - .github/workflows/windows-ffmpeg.yml
+  pull_request:
+    paths:
+      - scripts/build-ffmpeg-windows.sh
+      - .github/workflows/windows-ffmpeg.yml
+  workflow_dispatch:
+
+concurrency:
+  group: windows-ffmpeg-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Cached (with the exact source tarballs) until the script changes.
+      - name: Cache Windows FFmpeg helper
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .build-deps/ffmpeg-windows/bin
+            .build-deps/sources
+          key: ameya-ffmpeg-windows-${{ hashFiles('scripts/build-ffmpeg-windows.sh') }}
+
+      - name: Build (x64 + arm64)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./scripts/build-ffmpeg-windows.sh
+
+      - name: Verify sources
+        run: ./scripts/build-ffmpeg-windows.sh --sources-only
+
+      - name: Record sizes
+        run: |
+          {
+            echo "### ameya-ffmpeg.exe sizes"
+            echo "| File | Bytes | MiB |"
+            echo "|---|---|---|"
+            for f in .build-deps/ffmpeg-windows/bin/*.exe; do
+              b=$(stat -c %s "$f")
+              echo "| $(basename "$f") | $b | $(awk "BEGIN{printf \"%.1f\", $b/1048576}") |"
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Complete corresponding source: the untouched upstream tarballs, their sums, the script.
+      - name: Stage source bundle
+        run: |
+          STAGE=dist/ameya-ffmpeg-windows-sources
+          mkdir -p "$STAGE/sources" "$STAGE/scripts"
+          for f in $(cut -d' ' -f3 .build-deps/sources/SHA256SUMS-windows); do
+            cp ".build-deps/sources/$f" "$STAGE/sources/"
+          done
+          cp .build-deps/sources/SHA256SUMS-windows "$STAGE/sources/SHA256SUMS"
+          cp scripts/build-ffmpeg-windows.sh "$STAGE/scripts/"
+          cp THIRD_PARTY_NOTICES.md "$STAGE/"
+          cp -R LICENSES "$STAGE/"
+          (cd "$STAGE/sources" && sha256sum -c --quiet SHA256SUMS)
+          tar -czf dist/ameya-ffmpeg-windows-sources.tar.gz -C dist ameya-ffmpeg-windows-sources
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ameya-ffmpeg-windows-x64.exe
+          path: |
+            .build-deps/ffmpeg-windows/bin/ameya-ffmpeg-windows-x64.exe
+            .build-deps/ffmpeg-windows/bin/licenses
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ameya-ffmpeg-windows-arm64.exe
+          path: |
+            .build-deps/ffmpeg-windows/bin/ameya-ffmpeg-windows-arm64.exe
+            .build-deps/ffmpeg-windows/bin/licenses
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ameya-ffmpeg-windows-sources
+          path: dist/ameya-ffmpeg-windows-sources.tar.gz
+          if-no-files-found: error
+
+  # Test media made with Ubuntu's own ffmpeg (a test tool only; nothing from it is shipped).
+  fixture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Make test clip and tone
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg >/dev/null
+          mkdir fixture
+          ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x240:rate=25:duration=3 \
+            -f lavfi -i sine=frequency=440:sample_rate=48000:duration=3 \
+            -c:v libx264 -pix_fmt yuv420p -c:a aac -b:a 96k -shortest fixture/clip.mp4
+          ffmpeg -hide_banner -loglevel error -f lavfi -i sine=frequency=440:sample_rate=44100:duration=3 \
+            -ac 2 -c:a pcm_s16le fixture/tone.wav
+          ls -l fixture
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fixture
+          path: fixture
+
+  test:
+    needs: [build, fixture]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: windows-latest
+          - arch: arm64
+            os: windows-11-arm
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ameya-ffmpeg-windows-${{ matrix.arch }}.exe
+          path: helper
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: fixture
+          path: fixture
+
+      - name: Media Foundation present?
+        shell: pwsh
+        run: |
+          "OS: " + (Get-CimInstance Win32_OperatingSystem).Caption + " " + $env:PROCESSOR_ARCHITECTURE
+          if (Test-Path "$env:SystemRoot\System32\mfplat.dll") { "mfplat.dll: present" }
+          else {
+            "mfplat.dll: missing, trying Server-Media-Foundation"
+            Install-WindowsFeature Server-Media-Foundation | Out-String
+          }
+
+      - name: Version, licence and configuration
+        run: |
+          FF=helper/ameya-ffmpeg-windows-${{ matrix.arch }}.exe
+          "$FF" -version
+          "$FF" -hide_banner -buildconf > buildconf.txt
+          cat buildconf.txt
+          "$FF" -hide_banner -L | head -n 3 | tee licence.txt
+          grep -q 'GNU Lesser General Public' licence.txt
+          if grep -E -- '--enable-(gpl|nonfree|version3)' buildconf.txt; then
+            echo "error: not an LGPL build" >&2; exit 1
+          fi
+          "$FF" -hide_banner -encoders > encoders.txt
+          for e in libmp3lame libvorbis libopus libvpx libvpx-vp9 h264_mf hevc_mf aac_mf aac mpeg4 flac alac; do
+            grep -qE "^ [A-Z.]{6} $e " encoders.txt || { echo "error: encoder $e missing" >&2; exit 1; }
+          done
+
+      - name: Smoke conversions
+        run: |
+          FF=helper/ameya-ffmpeg-windows-${{ matrix.arch }}.exe
+          mkdir out
+          fail=0
+          echo "### Smoke test (${{ matrix.arch }}, ${{ matrix.os }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Output | Encoders | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          # name required input "encoder args" expected-codecs
+          run() {
+            name=$1 required=$2 input=$3 args=$4 expect=$5
+            result=PASS
+            # shellcheck disable=SC2086
+            if ! "$FF" -hide_banner -loglevel error -y -i "fixture/$input" $args "out/$name" 2> "out/$name.log"; then
+              result=FAIL
+            elif ! "$FF" -hide_banner -v error -i "out/$name" -f null - 2>> "out/$name.log"; then
+              result=FAIL
+            else
+              "$FF" -hide_banner -i "out/$name" 2> "out/$name.info" || true
+              for c in $expect; do
+                grep -q "$c" "out/$name.info" || { result=FAIL; echo "codec $c not found" >> "out/$name.log"; }
+              done
+            fi
+            [ "$result" = PASS ] && result="PASS ($(wc -c < "out/$name" | tr -d ' ') bytes)"
+            case "$result" in FAIL*) sed 's/^/    /' "out/$name.log"; [ "$required" = yes ] && fail=1 || result="FAIL (optional)";; esac
+            echo "$name: $result"
+            echo "| $name | $args | $result |" >> "$GITHUB_STEP_SUMMARY"
+          }
+          run tone.mp3  yes tone.wav "-c:a libmp3lame -b:a 192k" "mp3"
+          run tone.ogg  yes tone.wav "-c:a libvorbis -q:a 5" "vorbis"
+          run tone.opus yes tone.wav "-c:a libopus -b:a 128k" "opus"
+          run tone.m4a  yes tone.wav "-c:a aac_mf -b:a 128k" "aac"
+          run clip.webm yes clip.mp4 "-c:v libvpx-vp9 -b:v 500k -deadline realtime -cpu-used 8 -c:a libopus" "vp9 opus"
+          run clip-vp8.webm yes clip.mp4 "-c:v libvpx -b:v 500k -c:a libvorbis" "vp8 vorbis"
+          run clip.mkv  yes clip.mp4 "-c:v mpeg4 -q:v 4 -c:a flac" "mpeg4 flac"
+          run clip.mp4  yes clip.mp4 "-c:v h264_mf -b:v 1M -c:a aac" "h264 aac"
+          run clip-hevc.mp4 no clip.mp4 "-c:v hevc_mf -b:v 1M -c:a aac_mf" "hevc aac"
+          run clip.avi  yes clip.mp4 "-c:v mpeg4 -c:a libmp3lame" "mpeg4 mp3"
+          exit $fail
