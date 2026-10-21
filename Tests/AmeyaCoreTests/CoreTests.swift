@@ -59,7 +59,7 @@ struct FormatDetectionTests {
         #expect(FileFormat.detect(header: zip, fileExtension: "odt") == .odt)
         #expect(FileFormat.detect(header: zip, fileExtension: "zip") == .zip)
         #expect(FileFormat.detect(header: zip, fileExtension: "") == .zip)
-        #expect(FileFormat.detect(header: zip, fileExtension: "xlsx") == nil)
+        #expect(FileFormat.detect(header: zip, fileExtension: "xlsx") == nil) // written, never read
         #expect(FileFormat.detect(header: zip, fileExtension: "epub") == nil)
         let ole = Data([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1])
         #expect(FileFormat.detect(header: ole, fileExtension: "doc") == .doc)
@@ -74,6 +74,27 @@ struct FormatDetectionTests {
         #expect(FileFormat.detect(header: srt, fileExtension: "srt") == .srt)
         #expect(FileFormat.detect(header: srt, fileExtension: "txt") == .txt)
         #expect(FileFormat.detect(header: Data([0x00, 0x01, 0x02]), fileExtension: "txt") == nil)
+    }
+
+    @Test func dataFormats() {
+        let xmlPlist = Data("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"x\">\n<plist version=\"1.0\"><dict/></plist>".utf8)
+        #expect(FileFormat.sniff(xmlPlist) == .plist)
+        #expect(FileFormat.sniff(Data("bplist00".utf8) + Data(count: 8)) == .plist)
+        #expect(FileFormat.sniff(Data("<?xml version=\"1.0\"?><rss/>".utf8)) == .xml)
+        #expect(FileFormat.sniff(Data("<?xml version=\"1.0\"?>\n<!DOCTYPE html><html/>".utf8)) == .html)
+        // Contents decide even when the extension disagrees.
+        #expect(FileFormat.detect(header: xmlPlist, fileExtension: "xml") == .plist)
+
+        let text = Data("a,b\n1,2\n".utf8)
+        #expect(FileFormat.detect(header: text, fileExtension: "csv") == .csv)
+        #expect(FileFormat.detect(header: text, fileExtension: "tsv") == .tsv)
+        #expect(FileFormat.detect(header: Data("{\"a\": 1}".utf8), fileExtension: "json") == .json)
+        #expect(FileFormat.detect(header: Data("<a/>".utf8), fileExtension: "xml") == .xml)
+        #expect(FileFormat.detect(header: Data("{a = 1;}".utf8), fileExtension: "plist") == .plist) // old-style text plist
+        #expect(FileFormat.detect(header: Data([0x00, 0x01]), fileExtension: "csv") == nil)
+        // Only written, so never offered as a source.
+        #expect(FileFormat.detect(header: Data("a: 1\n".utf8), fileExtension: "yaml") == nil)
+        #expect(FileFormat.sniff(Data("{\"a\": 1}".utf8)) == nil)
     }
 
     @Test func extensionFallback() {
@@ -170,6 +191,27 @@ struct ConversionMatrixTests {
         #expect(matrix.possibleLosses(from: .wav, to: .m4a) == [.lossyAudio])
         #expect(matrix.possibleLosses(from: .wav, to: .flac).isEmpty)
         #expect(matrix.possibleLosses(from: .vtt, to: .srt) == [.subtitleStylingRemoved])
+    }
+
+    @Test func routesDataFormats() {
+        let system = ConversionMatrix(writable: FileFormat.systemWritable())
+        #expect(system.targets(for: .csv) == [.html, .md, .tsv, .json, .plist, .xml, .yaml, .xlsx])
+        #expect(system.targets(for: .xml).contains(.json))
+        #expect(system.targets(for: .plist).contains(.json))
+        #expect(system.targets(for: .yaml).isEmpty)
+        #expect(system.targets(for: .xlsx).isEmpty)
+        #expect(!ConversionMatrix.canConvert(from: .json, to: .pdf))
+        #expect(!ConversionMatrix.canConvert(from: .html, to: .csv))
+        #expect(!ConversionMatrix.canConvert(from: .json, to: .json))
+    }
+
+    @Test func warnsAboutDataLosses() {
+        #expect(matrix.possibleLosses(from: .json, to: .csv) == [.nestedDataFlattened])
+        #expect(matrix.possibleLosses(from: .csv, to: .json) == [.tableValuesTyped])
+        #expect(matrix.possibleLosses(from: .csv, to: .xlsx).isEmpty)
+        #expect(matrix.possibleLosses(from: .xml, to: .json) == [.xmlStructureMapped])
+        #expect(matrix.possibleLosses(from: .json, to: .plist) == [.nullsRemoved])
+        #expect(matrix.possibleLosses(from: .plist, to: .yaml) == [.datesAndDataAsText])
     }
 
     @Test func requestRoundTripsThroughTheWorkerProtocol() throws {
