@@ -20,6 +20,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var subtitleShiftMilliseconds: Int?
     /// Frame rate for MicroDVD subtitles. Overrides the file's own `{1}{1}fps` line; default 23.976.
     public var subtitleFrameRate: Double?
+    /// Re-encodes a text file in place (same format in and out), e.g. to fix its encoding.
+    public var text: TextEdits?
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -32,7 +34,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         debugCrash: Bool? = nil,
         language: String? = nil,
         subtitleShiftMilliseconds: Int? = nil,
-        subtitleFrameRate: Double? = nil
+        subtitleFrameRate: Double? = nil,
+        text: TextEdits? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
@@ -42,7 +45,27 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         self.language = language
         self.subtitleShiftMilliseconds = subtitleShiftMilliseconds
         self.subtitleFrameRate = subtitleFrameRate
+        self.text = text
     }
+}
+
+/// Edits applied when a text file is converted to itself: the result is always UTF-8 without a BOM.
+public struct TextEdits: Codable, Sendable, Equatable {
+    public enum LineEndings: String, Codable, Sendable {
+        case lf, crlf, keep
+    }
+
+    /// IANA name of the source encoding (e.g. "windows-1252"). `nil` detects it.
+    public var encoding: String?
+    public var lineEndings: LineEndings
+
+    public init(encoding: String? = nil, lineEndings: LineEndings = .lf) {
+        self.encoding = encoding
+        self.lineEndings = lineEndings
+    }
+
+    /// Formats whose text can be re-encoded to UTF-8 in place.
+    public static let editableFormats: Set<FileFormat> = [.txt, .srt, .vtt, .md, .csv, .vcf]
 }
 
 /// What the app asks the worker to do. Sent as JSON on the worker's command line.
@@ -80,6 +103,12 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case rawDevelopedWithDefaults
     case unsafeEntriesSkipped
     case specialFilesSkipped
+    case textRecoded
+    case madeQRCode
+    case onlyCodesRead
+    case contactFieldsLimited
+    case tracksBecamePoints
+    case trackTimesRemoved
     case nestedDataFlattened
     case tableValuesTyped
     case xmlStructureMapped
@@ -115,6 +144,12 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
         case .unsafeEntriesSkipped: "Entries with unsafe paths (absolute, or containing ..) were left out."
         case .specialFilesSkipped: "Links pointing outside the archive and special files were left out."
+        case .textRecoded: "The text was converted to UTF-8."
+        case .madeQRCode: "The text was turned into a QR code."
+        case .onlyCodesRead: "Only the QR codes and barcodes in the image are read."
+        case .contactFieldsLimited: "Only names, organisation, emails, phones, addresses, birthday and note are kept."
+        case .tracksBecamePoints: "Tracks and routes become one row per point."
+        case .trackTimesRemoved: "Times are kept only for tracks where every point has one."
         case .nestedDataFlattened: "Nested values became columns named like \"a.b\"; lists were written as JSON text in one cell."
         case .tableValuesTyped: "The first row became the keys; numbers and true/false became typed values, empty cells null."
         case .xmlStructureMapped: "Attributes became \"@name\" keys and text \"#text\"; values stay text, comments are dropped."
@@ -167,11 +202,15 @@ public struct ConversionMatrix: Sendable {
         if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
         case (.image, .image): return true
-        case (.image, .document): return target == .pdf
+        case (.image, .document): return target == .pdf || target == .txt // text: decoded QR codes
         case (.image, .video): return source == .gif
         case (.document, .document):
             return source == .pdf ? target.isTextDocument : (target.isTextDocument || target == .pdf)
-        case (.document, .image): return source == .pdf
+        case (.document, .image): return source == .pdf || (source == .txt && target == .png) // QR code
+        case (.contacts, .data): return target == .csv || target == .json
+        case (.data, .contacts): return source == .csv
+        case (.geo, .geo): return target != .kmz
+        case (.geo, .data): return target == .csv
         case (.audio, .audio), (.video, .video), (.video, .audio), (.subtitle, .subtitle): return true
         case (.video, .image): return target == .gif
         case (.archive, .archive): return target != .rar
@@ -179,6 +218,11 @@ public struct ConversionMatrix: Sendable {
         case (.data, .document): return source.isDataSource && (target == .html || target == .md)
         default: return false
         }
+    }
+
+    /// Whether a file can be rewritten in its own format with the given edits.
+    public static func canEdit(_ format: FileFormat, options: ConversionOptions) -> Bool {
+        options.text != nil && TextEdits.editableFormats.contains(format)
     }
 
     private static func dataLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
@@ -211,6 +255,14 @@ public struct ConversionMatrix: Sendable {
         if let notes = Self.bookLosses(from: source, to: target) { return notes }
         if Self.isTranscription(from: source, to: target) { return [.transcribedOnDevice] }
         switch (source.family, target.family) {
+        case (.document, .image) where source == .txt:
+            return [.madeQRCode]
+        case (.image, .document) where target == .txt:
+            return [.onlyCodesRead]
+        case (.contacts, _):
+            return [.contactFieldsLimited]
+        case (.geo, .data):
+            return [.tracksBecamePoints]
         case (.document, .document) where source == .pdf:
             return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]
         case (.document, .document) where target == .txt:

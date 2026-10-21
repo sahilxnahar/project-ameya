@@ -138,7 +138,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Password-encrypt a file (opens on other platforms) | P1 | ⬜ |
 | Send to phone over Wi-Fi | — | Not planned (needs the network) |
 | Share sheet (AirDrop, Messages, Mail) handled by macOS, not by Ameya | P2 | ⬜ |
-| QR code create and read | P1 | ⬜ |
+| QR code create and read | P1 | ✅ |
 | Sort into folders by date/place, find largest files, duplicate cleanup | P2 | ⬜ |
 | Base64, split/join large files, check an app's code signature | P2 | ⬜ |
 
@@ -201,6 +201,10 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
 | Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only, with language models already on the Mac (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); never downloads; captions ≤ 2 × 42 chars, ≤ 7 s |
 | Mac integration | Open With / drop on the Dock icon; Finder → Services → "Convert with Ameya" and "Convert to JPEG with Ameya"; menu bar "Convert Clipboard…" and "Copy Clipboard Picture As JPEG/PNG/PDF"; optional auto-convert of new HEIC photos in Downloads to JPEG; save to Downloads/Ameya or a chosen folder; open at login | Never the default app (Viewer, Alternate). Auto-convert is off by default, waits until a file has stopped growing for 2 s, writes the JPEG beside the photo, and only moves the original to the Trash if asked. A chosen folder is remembered with a security-scoped bookmark |
+| QR codes | Text → QR code PNG; any image or screenshot → TXT of every QR code and barcode found | Core Image + Vision, on-device. High error correction, 4-module quiet zone; over 1,273 bytes refused |
+| Contacts | vCard 2.1/3.0/4.0 → CSV, JSON; CSV → vCard 3.0 | Own parser (quoted-printable, charsets, folding). Name, organisation, emails, phones, addresses, birthday, note |
+| GPS tracks | GPX, KML, GeoJSON ↔ each other; KMZ in; any of them → CSV (lat, lon, ele, time, name) | Waypoints, routes and tracks; elevation and times kept (KML via gx:Track) |
+| Text encoding | TXT, CSV, SRT, WebVTT, Markdown, vCard in any encoding → UTF-8 (same format, `TextEdits` option) | Detects BOMs, UTF-16 without BOM, Windows-1252, Shift-JIS, GBK/GB18030, Big5, EUC-KR, KOI8-R, Windows-1251, ISO-8859-x; LF line endings |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 

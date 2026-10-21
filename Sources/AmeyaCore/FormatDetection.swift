@@ -27,7 +27,7 @@ extension FileFormat {
 
         // Containers whose first bytes don't say what's inside.
         if bytes.starts(with: [0x50, 0x4B, 0x03, 0x04]) || bytes.starts(with: [0x50, 0x4B, 0x05, 0x06]) { // ZIP
-            if let byExtension, [.docx, .odt].contains(byExtension) { return byExtension }
+            if let byExtension, [.docx, .odt, .kmz].contains(byExtension) { return byExtension }
             if let book = detectBook(bytes: bytes, fileExtension: fileExtension, isZip: true) { return book }
             return zipBasedDocuments.contains(fileExtension.lowercased()) ? nil : .zip
         }
@@ -63,8 +63,9 @@ extension FileFormat {
         // YAML and XLSX are left out: Ameya can only write them, so they aren't offered as sources.
         // MicroDVD is left out: .sub is also VobSub, a binary format Ameya can't read.
         let textFormats: Set<FileFormat> = [.txt, .srt, .vtt, .html, .md, .csv, .tsv, .json, .xml, .plist,
-                                            .ass, .ssa, .sbv, .ttml, .lrc, .sami]
+                                            .ass, .ssa, .sbv, .ttml, .lrc, .sami, .vcf, .gpx, .kml, .geojson]
         if let byExtension, textFormats.contains(byExtension), looksLikeText(bytes) {
+            if byExtension == .json, looksLikeGeoJSON(bytes) { return .geojson }
             return byExtension
         }
         return nil
@@ -122,6 +123,12 @@ extension FileFormat {
         if let subtitle = sniffSubtitleSignature(bytes) { return subtitle }
 
         if case .svg = svgRoot(in: [UInt8](header.prefix(headerLength))) { return .svg }
+        if lowered.hasPrefix("begin:vcard") { return .vcf }
+        if lowered.hasPrefix("<") {
+            let head = String(decoding: bytes, as: UTF8.self)
+            if head.contains("<gpx") { return .gpx }
+            if head.contains("<kml") { return .kml }
+        }
 
         // Data
         if starts("bplist00") { return .plist }
@@ -259,10 +266,22 @@ extension FileFormat {
         return .undetermined
     }
 
-    /// True when the bytes contain no NULs, or start with a UTF-16 byte-order mark.
+    /// True when the bytes contain no NULs, start with a UTF-16 byte-order mark, or look like
+    /// UTF-16 without one (NULs only in every other byte, as in mostly-Latin UTF-16 text).
     static func looksLikeText(_ bytes: [UInt8]) -> Bool {
         if bytes.isEmpty { return true }
         if bytes.starts(with: [0xFF, 0xFE]) || bytes.starts(with: [0xFE, 0xFF]) { return true }
-        return !bytes.contains(0)
+        guard bytes.contains(0) else { return true }
+        let even = stride(from: 0, to: bytes.count, by: 2).filter { bytes[$0] == 0 }.count
+        let odd = stride(from: 1, to: bytes.count, by: 2).filter { bytes[$0] == 0 }.count
+        let pairs = bytes.count / 2
+        return pairs >= 2 && (even == 0 || odd == 0) && max(even, odd) * 3 >= pairs
+    }
+
+    /// A JSON file whose opening bytes name a GeoJSON object type.
+    static func looksLikeGeoJSON(_ bytes: [UInt8]) -> Bool {
+        let head = String(decoding: bytes, as: UTF8.self).filter { !$0.isWhitespace }
+        return head.contains("\"type\":\"FeatureCollection\"")
+            || (head.contains("\"type\":\"Feature\"") && head.contains("\"geometry\""))
     }
 }

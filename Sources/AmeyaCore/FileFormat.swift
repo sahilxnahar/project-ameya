@@ -25,11 +25,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case zip, tar, tgz, tbz2, txz, sevenZip = "7z", rar
     // Data. YAML and XLSX can only be written.
     case csv, tsv, json, plist, xml, yaml, xlsx
+    // Contacts and GPS tracks. KMZ can only be read.
+    case vcf, gpx, kml, kmz, geojson
 
     public var id: String { rawValue }
 
     public enum Family: String, Codable, Sendable {
-        case image, document, audio, video, subtitle, archive, data
+        case image, document, audio, video, subtitle, archive, data, contacts, geo
 
         /// How long one job may run before it is stopped.
         public var timeout: Duration {
@@ -41,6 +43,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             case .subtitle: .seconds(30)
             case .archive: .seconds(1800)
             case .data: .seconds(300)
+            case .contacts, .geo: .seconds(120)
             }
         }
     }
@@ -56,6 +59,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .srt, .vtt, .ass, .ssa, .sbv, .ttml, .lrc, .microDVD, .sami: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
         case .csv, .tsv, .json, .plist, .xml, .yaml, .xlsx: .data
+        case .vcf: .contacts
+        case .gpx, .kml, .kmz, .geojson: .geo
         }
     }
 
@@ -130,6 +135,11 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .xml: "XML"
         case .yaml: "YAML"
         case .xlsx: "Excel (XLSX)"
+        case .vcf: "vCard"
+        case .gpx: "GPX"
+        case .kml: "KML"
+        case .kmz: "KMZ"
+        case .geojson: "GeoJSON"
         }
     }
 
@@ -204,6 +214,11 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .xml: "public.xml"
         case .yaml: "public.yaml"
         case .xlsx: "org.openxmlformats.spreadsheetml.sheet"
+        case .vcf: "public.vcard"
+        case .gpx: "com.topografix.gpx"
+        case .kml: "com.google.earth.kml"
+        case .kmz: "com.google.earth.kmz"
+        case .geojson: "public.geojson"
         }
     }
 
@@ -237,6 +252,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .tgz: ["tgz", "gz"]
         case .tbz2: ["tbz2", "tbz", "bz2"]
         case .txz: ["txz", "xz"]
+        case .vcf: ["vcf", "vcard"]
         case .tsv: ["tsv", "tab"]
         case .yaml: ["yaml", "yml"]
         default: [rawValue]
@@ -312,6 +328,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
             case .rar, .cbr: false // proprietary; extraction only
             case .webp: true // bundled libwebp encoder (ImageIO only decodes WebP)
+            case .kmz: false // read only
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true
             }
