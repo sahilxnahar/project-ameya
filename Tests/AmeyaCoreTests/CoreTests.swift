@@ -116,6 +116,42 @@ struct FormatDetectionTests {
         #expect(FileFormat.epub.family == .document && FileFormat.cbz.family == .document)
     }
 
+    @Test func subtitleFormatsAreDetectedByContent() {
+        func detect(_ text: String, _ ext: String) -> FileFormat? {
+            FileFormat.detect(header: Data(text.utf8), fileExtension: ext)
+        }
+        #expect(detect("[Script Info]\nScriptType: v4.00+\n", "txt") == .ass)
+        #expect(detect("\u{FEFF}[Script Info]\r\nScriptType: v4.00\r\n", "") == .ssa)
+        #expect(detect("[Script Info]\n; no script type\n", "ssa") == .ssa)
+        #expect(detect("[Script Info]\n; no script type\n", "") == .ass)
+        #expect(detect("<?xml version=\"1.0\"?>\n<tt xmlns=\"http://www.w3.org/ns/ttml\">", "xml") == .ttml)
+        #expect(detect("<tt:tt xmlns:tt=\"http://www.w3.org/ns/ttml\">", "") == .ttml)
+        #expect(detect("<tt xmlns=\"http://www.w3.org/2006/10/ttaf1\">", "dfxp") == .ttml)
+        #expect(detect("<?xml version=\"1.0\"?><root/>", "xml") == .xml) // plain XML belongs to the data engine
+        #expect(detect("<SAMI>\n<HEAD>", "") == .sami)
+        #expect(detect("0:00:01.000,0:00:02.500\nHi\n", "sbv") == .sbv)
+        #expect(detect("0:00:01.000,0:00:02.500\nHi\n", "") == .sbv)
+        #expect(detect("0:00:01.000,0:00:02.500\nHi\n", "txt") == .txt)
+        #expect(detect("{1}{1}23.976\n{10}{20}Hi\n", "sub") == .microDVD)
+        #expect(detect("[ti:Song]\n[00:01.00]Hi\n", "lrc") == .lrc)
+        #expect(detect("[00:01.00]Hi\n", "") == .lrc)
+        #expect(detect("[section]\nkey=value\n", "") == nil)
+        // .sub is also VobSub: binary MPEG-PS packets, which Ameya can't read.
+        #expect(FileFormat.detect(header: Data([0x00, 0x00, 0x01, 0xBA, 0x44, 0x00]), fileExtension: "sub") == nil)
+        #expect(FileFormat.fromExtension("dfxp") == .ttml)
+        #expect(FileFormat.fromExtension("smi") == .sami)
+    }
+
+    @Test func subtitleLosses() {
+        let matrix = ConversionMatrix(writable: [])
+        #expect(matrix.possibleLosses(from: .srt, to: .ass).isEmpty)
+        #expect(matrix.possibleLosses(from: .ass, to: .ssa).isEmpty)
+        #expect(matrix.possibleLosses(from: .ass, to: .srt) == [.subtitleStylingRemoved])
+        #expect(matrix.possibleLosses(from: .srt, to: .lrc) == [.subtitleStylingRemoved, .subtitleEndTimesDropped])
+        #expect(matrix.possibleLosses(from: .srt, to: .microDVD) == [.subtitleFrameRateAssumed])
+        #expect(ConversionMatrix.canConvert(from: .sami, to: .ttml))
+    }
+
     @Test func extensionFallback() {
         #expect(FileFormat.fromExtension("JPEG") == .jpeg)
         #expect(FileFormat.fromExtension("tif") == .tiff)

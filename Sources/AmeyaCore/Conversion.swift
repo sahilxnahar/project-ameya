@@ -16,6 +16,10 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var debugCrash: Bool?
     /// Spoken language for transcription, as a BCP-47 tag such as "en-GB". `nil` uses the Mac's language.
     public var language: String?
+    /// Moves every subtitle earlier (negative) or later (positive) by this many milliseconds.
+    public var subtitleShiftMilliseconds: Int?
+    /// Frame rate for MicroDVD subtitles. Overrides the file's own `{1}{1}fps` line; default 23.976.
+    public var subtitleFrameRate: Double?
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -26,7 +30,9 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         maxFrames: Int = ConversionOptions.defaultMaxFrames,
         debugDelaySeconds: Double? = nil,
         debugCrash: Bool? = nil,
-        language: String? = nil
+        language: String? = nil,
+        subtitleShiftMilliseconds: Int? = nil,
+        subtitleFrameRate: Double? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
@@ -34,6 +40,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         self.debugDelaySeconds = debugDelaySeconds
         self.debugCrash = debugCrash
         self.language = language
+        self.subtitleShiftMilliseconds = subtitleShiftMilliseconds
+        self.subtitleFrameRate = subtitleFrameRate
     }
 }
 
@@ -65,6 +73,8 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case gifShortened
     case lossyAudio
     case subtitleStylingRemoved
+    case subtitleEndTimesDropped
+    case subtitleFrameRateAssumed
     case markdownSimplified
     case madeSquareIcon
     case rawDevelopedWithDefaults
@@ -98,6 +108,8 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .gifShortened: "Only the first 30 seconds were turned into a GIF."
         case .lossyAudio: "AAC is compressed, so some audio detail is lost."
         case .subtitleStylingRemoved: "Subtitle positions and styling are removed."
+        case .subtitleEndTimesDropped: "LRC lyrics only keep when each line starts; end times are dropped."
+        case .subtitleFrameRateAssumed: "MicroDVD times are counted in video frames; check the frame rate matches your video (23.976 fps unless the file says otherwise)."
         case .markdownSimplified: "Headings, lists, links, tables, bold and italic are kept; fonts, colours and images are not."
         case .madeSquareIcon: "The image was made square and saved at every standard icon size."
         case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
@@ -216,7 +228,7 @@ public struct ConversionMatrix: Sendable {
         case (.audio, .audio):
             return target == .m4a && !source.isLossy ? [.lossyAudio] : []
         case (.subtitle, .subtitle):
-            return source == .vtt ? [.subtitleStylingRemoved] : []
+            return FileFormat.subtitleLosses(from: source, to: target)
         case (.image, .video):
             return [.transparencyFilledWhite]
         case (.data, _):

@@ -20,6 +20,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case mp4, mov, m4v
     // Subtitles
     case srt, vtt
+    case ass, ssa, sbv, ttml, lrc, microDVD = "sub", sami = "smi"
     // Archives. RAR can only be read.
     case zip, tar, tgz, tbz2, txz, sevenZip = "7z", rar
     // Data. YAML and XLSX can only be written.
@@ -52,7 +53,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md, .epub, .cbz, .cbr: .document
         case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
         case .mp4, .mov, .m4v: .video
-        case .srt, .vtt: .subtitle
+        case .srt, .vtt, .ass, .ssa, .sbv, .ttml, .lrc, .microDVD, .sami: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
         case .csv, .tsv, .json, .plist, .xml, .yaml, .xlsx: .data
         }
@@ -108,6 +109,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .m4v: "M4V"
         case .srt: "SRT"
         case .vtt: "WebVTT"
+        case .ass: "ASS (Advanced SubStation)"
+        case .ssa: "SSA (SubStation Alpha)"
+        case .sbv: "SBV (YouTube)"
+        case .ttml: "TTML / DFXP"
+        case .lrc: "LRC lyrics"
+        case .microDVD: "MicroDVD"
+        case .sami: "SAMI"
         case .zip: "ZIP"
         case .tar: "TAR"
         case .tgz: "TAR.GZ"
@@ -175,6 +183,13 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .m4v: "com.apple.m4v-video"
         case .srt: "public.srt"
         case .vtt: "org.w3.webvtt"
+        case .ass: "org.ameya.subtitle.ass"
+        case .ssa: "org.ameya.subtitle.ssa"
+        case .sbv: "org.ameya.subtitle.sbv"
+        case .ttml: "org.w3.ttml"
+        case .lrc: "org.ameya.lyrics.lrc"
+        case .microDVD: "org.ameya.subtitle.microdvd"
+        case .sami: "com.microsoft.sami"
         case .zip: "public.zip-archive"
         case .tar: "public.tar-archive"
         case .tgz: "org.gnu.gnu-zip-tar-archive"
@@ -213,6 +228,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .txt: ["txt", "text", "log"]
         case .html: ["html", "htm", "xhtml"]
         case .md: ["md", "markdown", "mdown", "mkd"]
+        case .ttml: ["ttml", "dfxp"]
+        case .sami: ["smi", "sami"]
         case .alac: [] // written as .m4a; never detected as a source
         case .wav: ["wav", "wave"]
         case .aiff: ["aiff", "aif", "aifc"]
