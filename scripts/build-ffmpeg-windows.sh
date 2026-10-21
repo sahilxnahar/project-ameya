@@ -185,7 +185,7 @@ FILTERS=aresample,aformat,anull,null,format,scale,fps,setsar,setpts,asetpts,trim
 
 # Windows system DLLs the helper may import. Anything else (libwinpthread-1.dll, libc++.dll, a codec
 # DLL...) means the build is not self-contained.
-SYSTEM_DLLS='^(kernel32|user32|advapi32|shell32|ole32|oleaut32|bcrypt|psapi|shlwapi|ucrtbase|api-ms-win-[a-z0-9-]+)\.dll$'
+SYSTEM_DLLS='^(kernel32|user32|advapi32|shell32|ole32|oleaut32|bcrypt|psapi|shlwapi|d3d11|dxgi|ucrtbase|api-ms-win-[a-z0-9-]+)\.dll$'
 
 for ARCH in $ARCHS; do
     case "$ARCH" in
@@ -266,7 +266,7 @@ for ARCH in $ARCHS; do
         --enable-demuxer=$DEMUXERS --enable-muxer=$MUXERS \
         --enable-decoder=$DECODERS --enable-encoder=$ENCODERS \
         --enable-parser=$PARSERS --enable-bsf=$BSFS --enable-filter=$FILTERS \
-        --enable-zlib --enable-mediafoundation \
+        --enable-zlib --enable-mediafoundation --enable-d3d11va \
         --enable-libmp3lame --enable-libopus --enable-libvorbis --enable-libvpx \
         >"$WORK/ffmpeg-configure.log" \
         && make -j"$JOBS" ffmpeg.exe >/dev/null) || { tail -n 40 "$WORK/ffmpeg/ffbuild/config.log" >&2 || true; exit 1; }
@@ -282,6 +282,11 @@ for ARCH in $ARCHS; do
         grep -q "^#define CONFIG_${name}_ENCODER 1" "$WORK/ffmpeg/config.h" \
             || { echo "error: encoder $enc was not enabled" >&2; exit 1; }
     done
+    # The *_mf encoders use the D3D11 hwcontext types (FFmpeg 8 needs it to compile mfenc.c). Only the
+    # hwcontext is built - no hardware decoders, as --disable-everything leaves the hwaccels off - and
+    # d3d11.dll is loaded at run time, like mfplat.dll.
+    grep -q '^#define CONFIG_D3D11VA 1' "$WORK/ffmpeg/config.h" \
+        || { echo "error: d3d11va (needed by the Media Foundation encoders) was not enabled" >&2; exit 1; }
     grep -q '^#define HAVE_W32THREADS 1' "$WORK/ffmpeg/config.h" \
         || { echo "error: FFmpeg was built without threads" >&2; exit 1; }
 

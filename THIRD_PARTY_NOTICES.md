@@ -306,7 +306,9 @@ and FFmpeg's `COPYING.LGPLv2.1` into a `licenses/` folder that is distributed ne
 Licensing is the same as on macOS: no `--enable-gpl`, no `--enable-nonfree` (the script also refuses
 `--enable-version3`), so the helper is LGPL-2.1-or-later; no x264, x265, Xvid or FDK-AAC code. H.264, HEVC and
 AAC can be encoded by Windows' Media Foundation (`h264_mf`, `hevc_mf`, `aac_mf`), which is part of Windows
-and is loaded at run time; AAC is also available from FFmpeg's own encoder. The script stops if `config.h`
+and is loaded at run time; AAC is also available from FFmpeg's own encoder. FFmpeg's Media Foundation
+encoders need its Direct3D 11 hardware-context code (`--enable-d3d11va`); only that context is built (no
+hardware decoders), and `d3d11.dll`, also part of Windows, is likewise loaded at run time. The script stops if `config.h`
 reports GPL, LGPLv3 or non-free, if a requested encoder is missing, or if the `.exe` imports any DLL other
 than Windows system DLLs.
 
@@ -332,7 +334,7 @@ macOS ones above):
   --enable-protocol='file,pipe' \
   --enable-demuxer=... --enable-muxer=... --enable-decoder=... --enable-parser=... --enable-bsf=... --enable-filter=... \
   --enable-encoder='libmp3lame,libvorbis,libopus,libvpx_vp8,libvpx_vp9,h264_mf,hevc_mf,aac_mf,aac,mpeg4,flac,alac,pcm_s16le,pcm_s24le,pcm_s16be,pcm_s24be' \
-  --enable-zlib --enable-mediafoundation \
+  --enable-zlib --enable-mediafoundation --enable-d3d11va \
   --enable-libmp3lame --enable-libopus --enable-libvorbis --enable-libvpx
 ```
 
