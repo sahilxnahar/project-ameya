@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The main window, for bigger jobs. Closing it keeps Ameya running in the notification area. -->
+<Window
+    x:Class="Ameya.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Ameya.App"
+    Title="Ameya">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <local:ConverterView x:Name="Converter" Grid.Row="0" />
+        <Expander
+            x:Name="SettingsExpander"
+            Grid.Row="1"
+            Header="Settings"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Stretch"
+            Margin="16,0,16,16"
+            AutomationProperties.Name="Settings"
+            AutomationProperties.HelpText="Where converted files go, and how Ameya runs.">
+            <StackPanel Spacing="8">
+                <TextBlock TextWrapping="Wrap">
+                    <Run Text="Converted files are saved in " /><Run x:Name="OutputFolderRun" FontWeight="SemiBold" /><Run Text=". Nothing is ever replaced: a new name is picked when one is taken." />
+                </TextBlock>
+                <Button
+                    Content="Open the Ameya folder"
+                    Click="OnOpenOutputFolder"
+                    AutomationProperties.Name="Open the Ameya folder"
+                    AutomationProperties.HelpText="Opens the folder where converted files are saved." />
+                <TextBlock TextWrapping="Wrap" Text="Ameya keeps running in the notification area when this window is closed. Everything happens on this PC; nothing is uploaded. Animations follow the Windows setting “Animation effects”." />
+                <Button
+                    Content="Quit Ameya"
+                    Click="OnQuit"
+                    AutomationProperties.Name="Quit Ameya"
+                    AutomationProperties.HelpText="Stops Ameya and removes it from the notification area." />
+            </StackPanel>
+        </Expander>
+    </Grid>
+</Window>

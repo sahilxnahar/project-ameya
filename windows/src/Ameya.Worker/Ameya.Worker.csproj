@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- One short-lived, sandboxed process per job (Low integrity, inside a Job Object).
+       Reads the source from stdin, writes the result to stdout, status lines to stderr. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(AmeyaWindowsTfm)</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Ameya.Worker</RootNamespace>
+    <AssemblyName>Ameya.Worker</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Platforms>AnyCPU;x64;ARM64</Platforms>
+    <!-- The worker follows the app's architecture when the app is built for x64 or ARM64. -->
+    <RuntimeIdentifier Condition="'$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
+    <!-- Must match the app: an exe can only reference an exe with the same self-containment. -->
+    <SelfContained Condition="'$(AmeyaSelfContained)' == 'true'">true</SelfContained>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ameya.Core\Ameya.Core.csproj" />
+    <ProjectReference Include="..\Ameya.Engines\Ameya.Engines.csproj" />
+  </ItemGroup>
+</Project>

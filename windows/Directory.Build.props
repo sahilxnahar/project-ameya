@@ -1,0 +1,19 @@
+<Project>
+  <!-- Shared settings for every project in the Windows solution. -->
+  <PropertyGroup>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- The default analyzer set (correctness, platform compatibility, interop) as errors. -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+    <Company>Project Ameya</Company>
+    <Product>Ameya</Product>
+    <Copyright>Project Ameya contributors, MPL-2.0</Copyright>
+    <Version>0.1.0</Version>
+    <!-- The shared spec exported by the Mac app's tests (see Tests/AmeyaCoreTests/SpecExportTests.swift). -->
+    <AmeyaSpecDir>$(MSBuildThisFileDirectory)..\spec\</AmeyaSpecDir>
+    <AmeyaWindowsTfm>net8.0-windows10.0.19041.0</AmeyaWindowsTfm>
+  </PropertyGroup>
+</Project>

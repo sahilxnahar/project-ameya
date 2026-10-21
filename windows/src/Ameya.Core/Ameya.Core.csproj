@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Formats, detection, conversion matrix, output naming, TAR stream and the worker runner.
+       No UI and no WinRT, so almost all of it is plain .NET; the process sandbox (Job Object,
+       Low integrity) lives in Windows/ and is only called on Windows. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Ameya.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(AmeyaSpecDir)formats.json" LogicalName="Ameya.spec.formats.json" Link="spec\formats.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ameya.Tests" />
+  </ItemGroup>
+</Project>

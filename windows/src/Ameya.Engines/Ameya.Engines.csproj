@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Conversion engines. Loaded only by the worker process (and, for its capability list, by the app).
+       Images use the Windows Imaging Component through Windows.Graphics.Imaging. -->
+  <PropertyGroup>
+    <TargetFramework>$(AmeyaWindowsTfm)</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Ameya.Engines</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Ameya.Core\Ameya.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ameya.Tests" />
+  </ItemGroup>
+</Project>

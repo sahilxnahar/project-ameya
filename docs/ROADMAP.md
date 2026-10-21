@@ -170,6 +170,26 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Sandboxed plug-in system for community formats | P2 | ⬜ |
 | Community gallery of recipes and plug-ins | P2 | ⬜ |
 
+### Windows
+
+Native C# + WinUI 3 app in `windows/` for Windows 11 and Windows 10 22H2 (see `windows/README.md`).
+Formats and routes come from the shared spec in `spec/`, exported by the Mac tests.
+
+| Area | Priority | Status |
+|---|---|---|
+| Shared spec (formats, routes, notes, detection vectors, TAR sample) with parity tests | P0 | ✅ |
+| Core: detection, matrix, output naming, strict TAR stream, worker protocol | P0 | ✅ |
+| Sandboxed worker per job: Job Object (kill tree, memory cap, UI limits) + Low integrity | P0 | ✅ |
+| Images via WIC: JPEG, PNG, TIFF, BMP, GIF, ICO, images → PDF; HEIC/AVIF/WebP read with Store extensions | P0 | ✅ |
+| Tray-first app: notification-area icon, compact panel, main window, drop/choose/paste | P0 | 🟡 built, not yet tried by hand |
+| MSIX (x64, ARM64) with no network capability; CI build, tests, install and self-test | P0 | ✅ |
+| Audio and video (LGPL FFmpeg as a separate process in the worker's job) | P0 | ⬜ |
+| Documents, PDF tools and OCR (Windows.Media.Ocr) | P0 | ⬜ |
+| Archives, data, subtitles, e-books | P1 | ⬜ |
+| Design pass, Narrator/keyboard/high-contrast audit | P0 | ⬜ |
+| Explorer integration (context menu, Send to, share target) | P1 | ⬜ |
+| Real code-signing certificate and Store/winget release | P1 | ⬜ |
+
 ### Release
 
 | Feature | Priority | Status |
