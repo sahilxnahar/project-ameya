@@ -105,7 +105,8 @@ struct PDFToolsTests {
         #expect(throws: ConversionError.lockedPDF) { try run(.splitEveryPage, [locked]) }
 
         let pdf = try file("plain.pdf", PDFFixtures.numbered(1))
-        #expect(throws: ConversionError.notAvailableYet("Making PDFs smaller")) { try run(.compress(quality: 0.5), [pdf]) }
+        #expect(throws: ConversionError.lockedPDF) { try run(.compress(quality: 0.5), [locked]) }
+        #expect(try run(.compress(quality: 0.5), [pdf]).result.notes == [.alreadySmallEnough]) // no pictures to shrink
         #expect(throws: ConversionError.self) { try run(.ocr(languages: nil), [pdf]) }
     }
 

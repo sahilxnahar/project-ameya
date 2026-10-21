@@ -86,7 +86,9 @@ public enum PDFAction: Codable, Sendable, Equatable {
     case deletePages([Int])
     /// The new order, as original page numbers.
     case reorder([Int])
-    case compress(quality: Double)
+    /// Re-saves pages that are mostly pictures as JPEG (`quality` 0…1 sets resolution and JPEG
+    /// quality); text pages stay vector. With `targetBytes`, lowers quality until the file fits.
+    case compress(quality: Double, targetBytes: Int? = nil)
     /// Add a searchable text layer to scanned pages.
     case ocr(languages: [String]?)
 

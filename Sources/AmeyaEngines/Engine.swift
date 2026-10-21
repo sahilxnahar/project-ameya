@@ -56,8 +56,13 @@ public enum Engine {
         case _ where source.isFFmpegOnly || target.isFFmpegTarget:
             // Ogg, Opus, MP3 output, MKV, WebM, AVI…: the bundled LGPL FFmpeg helper.
             guard let helper = FFmpegAvailability.helperURL else { throw ConversionError.unsupportedConversion(from: source, to: target) }
-            try await FFmpegConverter.convert(input: input, to: target, output: output, helper: helper, progress: progress)
-            notes = ConversionMatrix(writable: [target]).possibleLosses(from: source, to: target)
+            if let edits = request.options.video, target.family == .video { // trim, mute, size presets
+                notes = try await FFmpegConverter.edit(input: input, from: source, to: target, output: output,
+                                                       helper: helper, edits: edits, progress: progress)
+            } else {
+                try await FFmpegConverter.convert(input: input, to: target, output: output, helper: helper, progress: progress)
+                notes = ConversionMatrix(writable: [target]).possibleLosses(from: source, to: target)
+            }
 
         case _ where EverydayConverter.handles(source, target, options: request.options):
             notes = try EverydayConverter.convert(input: input, from: source, request: request, output: output, progress: progress)
@@ -94,6 +99,10 @@ public enum Engine {
         case (.audio, .audio), (.video, .audio):
             try await AudioConverter.convert(input: input, to: target, output: output, progress: progress)
             notes = ConversionMatrix(writable: [target]).possibleLosses(from: source, to: target)
+
+        case (.video, .video) where request.options.video != nil: // trim, mute, size presets
+            notes = try await VideoEditor.edit(input: input, from: source, to: target, edits: request.options.video!,
+                                               output: output, progress: progress)
 
         case (.video, .video):
             try await VideoConverter.transcode(input: input, to: target, output: output, progress: progress)

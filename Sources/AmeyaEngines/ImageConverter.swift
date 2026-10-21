@@ -19,9 +19,13 @@ public enum ConversionError: Error, Equatable, LocalizedError {
     case dataLimit(String)
     /// A tool that exists in the request format but has no engine yet, e.g. "Making PDFs smaller".
     case notAvailableYet(String)
+    /// A size target or edit that can't work, e.g. a two-hour video into 8 MB. The text is a full,
+    /// friendly sentence that says what to do instead.
+    case cannotFit(String)
 
     public var errorDescription: String? {
         switch self {
+        case .cannotFit(let advice): advice
         case .notAvailableYet(let feature): "\(feature) isn't available yet."
         case .unsupportedConversion(let from, let to): "Ameya can't convert \(from.displayName) to \(to.displayName) yet."
         case .noText: "This PDF has no selectable text. (It may be a scan; text recognition is coming.)"
