@@ -7,6 +7,7 @@ struct MainView: View {
     @EnvironmentObject private var store: JobStore
     @State private var isTargeted = false
     @State private var isImporting = false
+    @State private var panelTool: Tool?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -65,11 +66,13 @@ struct MainView: View {
                 Button("Clear", role: .cancel) { store.clearPending() }
                     .buttonStyle(.borderless)
             }
-            if store.targets.isEmpty {
+            if store.targets.isEmpty && store.tools.isEmpty {
                 Text("These files have no conversion in common. Convert them separately.")
                     .foregroundStyle(.secondary)
-            } else {
+            }
+            if !store.targets.isEmpty {
                 Text("Convert to").font(.subheadline).foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                     ForEach(store.targets) { target in
                         TargetButton(target: target, notes: store.possibleLosses(to: target)) {
@@ -77,6 +80,23 @@ struct MainView: View {
                         }
                     }
                 }
+            }
+            if !store.tools.isEmpty {
+                Text("Tools").font(.subheadline).foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+                    ForEach(store.tools) { tool in
+                        ToolButton(tool: tool) {
+                            if tool.panel != nil { panelTool = tool } else { store.run(tool) }
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(item: $panelTool) { tool in
+            ToolPanelSheet(tool: tool, formats: store.pending.map(\.format)) { options in
+                panelTool = nil
+                if let options { store.run(tool, options: options) }
             }
         }
     }
@@ -123,6 +143,46 @@ private struct TargetButton: View {
     }
 }
 
+private struct ToolButton: View {
+    let tool: Tool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(tool.title, systemImage: tool.systemImage)
+                .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+        }
+        .help(tool.help)
+        .accessibilityLabel(tool.title)
+        .accessibilityHint(tool.help)
+    }
+}
+
+/// Hosts a tool's settings panel with a Cancel button (Escape) around it.
+private struct ToolPanelSheet: View {
+    let tool: Tool
+    let formats: [FileFormat]
+    /// Options to run with, or `nil` when cancelled.
+    let finish: (ConversionOptions?) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(tool.title).font(.headline).accessibilityAddTraits(.isHeader)
+            if let panel = tool.panel {
+                panel(formats) { options in finish(options) }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { finish(nil) }
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityHint("Closes without changing anything.")
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 360)
+    }
+}
+
 private struct JobRow: View {
     @ObservedObject var job: Job
     let cancel: () -> Void
@@ -143,21 +203,24 @@ private struct JobRow: View {
 
     @ViewBuilder private var statusIcon: some View {
         switch job.state {
-        case .queued: Image(systemName: "clock").foregroundStyle(.secondary)
-        case .running: ProgressView(value: job.progress).progressViewStyle(.circular).controlSize(.small)
-        case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-        case .failed: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red)
-        case .cancelled: Image(systemName: "minus.circle").foregroundStyle(.secondary)
+        case .queued: Image(systemName: "clock").foregroundStyle(.secondary).accessibilityLabel("Waiting")
+        case .running:
+            ProgressView(value: job.progress).progressViewStyle(.circular).controlSize(.small)
+                .accessibilityLabel("Working")
+        case .done: Image(systemName: "checkmark.circle.fill").foregroundStyle(.green).accessibilityLabel("Done")
+        case .failed: Image(systemName: "xmark.octagon.fill").foregroundStyle(.red).accessibilityLabel("Didn't work")
+        case .cancelled: Image(systemName: "minus.circle").foregroundStyle(.secondary).accessibilityLabel("Cancelled")
         }
     }
 
     @ViewBuilder private var detail: some View {
         switch job.state {
         case .queued: Text("Waiting…")
-        case .running: Text("Converting \(job.source.lastPathComponent)…")
+        case .running: Text(job.activity)
         case .done(let result):
             let size = ByteCountFormatter.string(fromByteCount: Int64(result.outputBytes), countStyle: .file)
-            Text(([size] + result.notes.map(\.message)).joined(separator: " · "))
+            let summary = result.outputNames.map { "\($0.count) file\($0.count == 1 ? "" : "s")" } ?? size
+            Text(([summary] + result.notes.map(\.message)).joined(separator: " · "))
         case .failed(let message): Text(message)
         case .cancelled: Text("Cancelled")
         }
@@ -167,8 +230,15 @@ private struct JobRow: View {
         switch job.state {
         case .queued, .running:
             Button("Cancel", action: cancel).buttonStyle(.borderless)
+        case .done where job.isFolder:
+            // Opening a folder shows it in Finder.
+            Button("Show in Finder") { NSWorkspace.shared.open(job.destination) }
+                .buttonStyle(.borderless)
+                .accessibilityHint("Opens the folder \(job.destination.lastPathComponent) in Finder.")
         case .done:
-            Button("Open") { NSWorkspace.shared.open(job.destination) }.buttonStyle(.borderless)
+            Button("Open") { NSWorkspace.shared.open(job.destination) }
+                .buttonStyle(.borderless)
+                .accessibilityHint("Opens \(job.destination.lastPathComponent).")
             Button {
                 NSWorkspace.shared.activateFileViewerSelecting([job.destination])
             } label: {

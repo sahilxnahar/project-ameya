@@ -41,34 +41,61 @@ do {
     fail("Couldn't create a working folder.")
 }
 
-// Copy stdin to a file. AVFoundation needs a file, and streaming keeps memory flat for large videos.
-let inputExtension = request.source?.preferredExtension ?? "bin"
-let input = scratch.appendingPathComponent("input.\(inputExtension)")
-do {
-    FileManager.default.createFile(atPath: input.path, contents: nil)
-    let writer = try FileHandle(forWritingTo: input)
-    var total: Int64 = 0
-    while let chunk = try FileHandle.standardInput.read(upToCount: chunkSize), !chunk.isEmpty {
-        total += Int64(chunk.count)
-        guard total <= maxInputBytes else { fail("The file is larger than 20 GB.", scratch: scratch) }
-        try writer.write(contentsOf: chunk)
+var inputs: [URL] = []
+if let formats = request.inputs, formats.count > 1 {
+    // Several files arrive as a strict TAR stream named 0.ext, 1.ext, … in order.
+    let folder = scratch.appendingPathComponent("inputs", isDirectory: true)
+    do {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let names = try TarStream.extract(
+            from: FileHandle.standardInput, into: folder,
+            limits: TarStream.Limits(maxEntries: 1_000, maxTotalBytes: maxInputBytes)
+        )
+        let expected = formats.enumerated().map { "\($0.offset).\($0.element.preferredExtension)" }
+        guard names == expected else { fail("The converter received an unexpected set of files.", scratch: scratch) }
+        inputs = names.map { folder.appendingPathComponent($0) }
+    } catch {
+        fail((error as? LocalizedError)?.errorDescription ?? "Couldn't read the files.", scratch: scratch)
     }
-    try writer.close()
-    guard total > 0 else { fail("The file is empty.", scratch: scratch) }
-} catch {
-    fail("Couldn't read the file.", scratch: scratch)
+} else {
+    // Copy stdin to a file. AVFoundation needs a file, and streaming keeps memory flat for large videos.
+    let inputExtension = request.source?.preferredExtension ?? "bin"
+    let input = scratch.appendingPathComponent("input.\(inputExtension)")
+    do {
+        FileManager.default.createFile(atPath: input.path, contents: nil)
+        let writer = try FileHandle(forWritingTo: input)
+        var total: Int64 = 0
+        while let chunk = try FileHandle.standardInput.read(upToCount: chunkSize), !chunk.isEmpty {
+            total += Int64(chunk.count)
+            guard total <= maxInputBytes else { fail("The file is larger than 20 GB.", scratch: scratch) }
+            try writer.write(contentsOf: chunk)
+        }
+        try writer.close()
+        guard total > 0 else { fail("The file is empty.", scratch: scratch) }
+    } catch {
+        fail("Couldn't read the file.", scratch: scratch)
+    }
+    inputs = [input]
 }
 emit(WorkerProtocol.progressPrefix + "0.02")
 
 do {
-    let (output, result) = try await Engine.convert(input: input, request: request, scratch: scratch) { fraction in
+    var (outputs, result) = try await Engine.run(inputs: inputs, request: request, scratch: scratch) { fraction in
         emit(WorkerProtocol.progressPrefix + String(format: "%.3f", fraction))
     }
-    let reader = try FileHandle(forReadingFrom: output)
-    while let chunk = try reader.read(upToCount: chunkSize), !chunk.isEmpty {
-        try FileHandle.standardOutput.write(contentsOf: chunk)
+    if let names = result.outputNames {
+        // Several files leave as a TAR stream; outputBytes is then the stream's size.
+        guard names.count == outputs.count else { fail("The converter produced an unexpected set of files.", scratch: scratch) }
+        result.outputBytes = Int(try TarStream.write(files: Array(zip(names, outputs)).map { (name: $0.0, url: $0.1) },
+                                                     to: FileHandle.standardOutput))
+    } else {
+        guard outputs.count == 1 else { fail("The converter produced an unexpected set of files.", scratch: scratch) }
+        let reader = try FileHandle(forReadingFrom: outputs[0])
+        while let chunk = try reader.read(upToCount: chunkSize), !chunk.isEmpty {
+            try FileHandle.standardOutput.write(contentsOf: chunk)
+        }
+        try reader.close()
     }
-    try reader.close()
     try? FileManager.default.removeItem(at: scratch)
     emit(WorkerProtocol.donePrefix + (try WorkerProtocol.encode(result)))
     exit(0)

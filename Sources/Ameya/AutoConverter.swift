@@ -101,7 +101,7 @@ final class AutoConverter {
             watching[job.id] = job.$state.sink { [weak self] state in
                 guard state.isFinished else { return }
                 if case .done = state {
-                    try? FileManager.default.trashItem(at: job.source, resultingItemURL: nil)
+                    for source in job.sources { try? FileManager.default.trashItem(at: source, resultingItemURL: nil) }
                 }
                 Task { @MainActor in self?.watching[job.id] = nil }
             }

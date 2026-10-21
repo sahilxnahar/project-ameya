@@ -105,6 +105,102 @@ struct WorkerRunnerTests {
         #expect(FileManager.default.fileExists(atPath: next.path))
     }
 
+    @Test func mergesSeveralInputsIntoOnePDF() async throws {
+        let first = directory.appendingPathComponent("a.pdf")
+        let second = directory.appendingPathComponent("b.pdf")
+        try Self.pdf(pages: 2).write(to: first)
+        try Self.pdf(pages: 1).write(to: second)
+        let destination = directory.appendingPathComponent("a (merged).pdf")
+        let request = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(pdf: .merge),
+                                        inputs: [.pdf, .png, .pdf])
+        let result = try await runner.run(inputs: [first, source, second], destination: destination, request: request, temporaryDirectory: bundleFolder())
+        #expect(result.outputNames == nil)
+        #expect(Self.pageCount(destination) == 4)
+        #expect(leftovers().isEmpty)
+        #expect(temporaryBundles().isEmpty)
+    }
+
+    @Test func splitsIntoAFolder() async throws {
+        let pdf = directory.appendingPathComponent("three.pdf")
+        try Self.pdf(pages: 3).write(to: pdf)
+        let destination = directory.appendingPathComponent("three (pages)", isDirectory: true)
+        let request = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(pdf: .splitEveryPage))
+        let result = try await runner.run(input: pdf, destination: destination, request: request)
+        #expect(result.outputNames == ["Page 001.pdf", "Page 002.pdf", "Page 003.pdf"])
+        let names = try FileManager.default.contentsOfDirectory(atPath: destination.path).sorted()
+        #expect(names == result.outputNames)
+        #expect(names.allSatisfy { Self.pageCount(destination.appendingPathComponent($0)) == 1 })
+        #expect(leftovers().isEmpty)
+    }
+
+    @Test func neverOverwritesAnExistingFolder() async throws {
+        let pdf = directory.appendingPathComponent("two.pdf")
+        try Self.pdf(pages: 2).write(to: pdf)
+        let destination = directory.appendingPathComponent("two (pages)", isDirectory: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: false)
+        try Data("keep".utf8).write(to: destination.appendingPathComponent("mine.txt"))
+        let request = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(pdf: .splitEveryPage))
+        await #expect(throws: WorkerError.outputExists("two (pages)")) {
+            try await runner.run(input: pdf, destination: destination, request: request)
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: destination.path) == ["mine.txt"])
+        #expect(leftovers().isEmpty)
+    }
+
+    @Test func cleansUpWhenAMultiFileJobFails() async throws {
+        let garbage = directory.appendingPathComponent("broken.pdf")
+        try Data("%PDF-1.4 nothing here".utf8).write(to: garbage)
+        let destination = directory.appendingPathComponent("broken (merged).pdf")
+        let request = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(pdf: .merge), inputs: [.pdf, .png])
+        await #expect(throws: WorkerError.self) {
+            try await runner.run(inputs: [garbage, source], destination: destination, request: request, temporaryDirectory: bundleFolder())
+        }
+        let folder = directory.appendingPathComponent("broken (pages)", isDirectory: true)
+        let split = ConversionRequest(source: .pdf, target: .pdf, options: ConversionOptions(pdf: .splitEveryPage))
+        await #expect(throws: WorkerError.self) { try await runner.run(input: garbage, destination: folder, request: split) }
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+        #expect(!FileManager.default.fileExists(atPath: folder.path))
+        #expect(leftovers().isEmpty)
+        #expect(temporaryBundles().isEmpty)
+    }
+
+    @Test func editsKeepTheSourceFormat() async throws {
+        let destination = directory.appendingPathComponent("input (rotated).png")
+        let request = ConversionRequest(source: .png, target: .png, options: ConversionOptions(image: ImageEdits(rotation: 90)))
+        let result = try await runner.run(input: source, destination: destination, request: request)
+        #expect(result.outputBytes > 0)
+        #expect(FileFormat.detect(at: destination) == .png)
+    }
+
+    /// A private folder for the runner's temporary input bundles, so the check below sees only this test's.
+    private func bundleFolder() -> URL {
+        let folder = directory.appendingPathComponent("bundles", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    /// Input bundles the runner left behind.
+    private func temporaryBundles() -> [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: bundleFolder().path)) ?? []
+    }
+
+    private static func pdf(pages: Int) -> Data {
+        let data = NSMutableData()
+        let context = CGContext(consumer: CGDataConsumer(data: data)!, mediaBox: nil, nil)!
+        for _ in 0..<pages {
+            var box = CGRect(x: 0, y: 0, width: 200, height: 100)
+            context.beginPage(mediaBox: &box)
+            context.endPage()
+        }
+        context.closePDF()
+        return data as Data
+    }
+
+    private static func pageCount(_ url: URL) -> Int {
+        guard let provider = CGDataProvider(url: url as CFURL), let document = CGPDFDocument(provider) else { return 0 }
+        return document.numberOfPages
+    }
+
     /// Hidden `.partial` files left behind by a failed job.
     private func leftovers() -> [String] {
         ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).filter { $0.hasSuffix(".partial") }

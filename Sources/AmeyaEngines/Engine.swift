@@ -3,7 +3,32 @@ import Foundation
 
 /// Picks the right engine for a conversion. Runs inside the worker process.
 public enum Engine {
+    /// Runs one job over one or more inputs (in order) and returns its outputs, all inside `scratch`.
+    ///
+    /// When `result.outputNames` is set the job produced a set of files (`outputs`, named as listed),
+    /// which the worker sends as a TAR stream and the app places as a folder. Otherwise `outputs`
+    /// holds exactly one file.
+    ///
+    /// Dispatch: `options.pdf` → `PDFTools`; otherwise a single input → `convert`.
+    @MainActor
+    public static func run(
+        inputs: [URL],
+        request: ConversionRequest,
+        scratch: URL,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> (outputs: [URL], result: ConversionResult) {
+        if let action = request.options.pdf {
+            return try PDFTools.run(action, inputs: inputs, request: request, scratch: scratch, progress: progress)
+        }
+        guard inputs.count == 1 else {
+            throw ConversionError.invalidData("this conversion takes one file at a time")
+        }
+        let (output, result) = try await convert(input: inputs[0], request: request, scratch: scratch, progress: progress)
+        return ([output], result)
+    }
+
     /// Converts `input` and writes the result into the `scratch` folder.
+    /// The target may equal the source when `request.options.hasEdits` (e.g. rotate a JPEG, keep JPEG).
     /// Runs on the main actor because the system document readers (HTML, Word) require it;
     /// the worker has no UI, so nothing else competes for the main thread.
     @MainActor
@@ -15,7 +40,9 @@ public enum Engine {
     ) async throws -> (output: URL, result: ConversionResult) {
         guard let source = request.source ?? FileFormat.detect(at: input) else { throw ConversionError.unreadable }
         let target = request.target
-        guard ConversionMatrix.canConvert(from: source, to: target) || ConversionMatrix.canEdit(source, options: request.options) else {
+        let editInPlace = source == target && request.options.hasEdits
+        guard editInPlace || ConversionMatrix.canConvert(from: source, to: target)
+                || ConversionMatrix.canEdit(source, options: request.options) else {
             throw ConversionError.unsupportedConversion(from: source, to: target)
         }
         let output = scratch.appendingPathComponent("output.\(target.preferredExtension)")
