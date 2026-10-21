@@ -10,6 +10,9 @@ struct SettingsView: View {
     @State private var folderName = OutputLocation.chosenFolder()?.lastPathComponent
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
+    @AppStorage(Preferences.playSoundsKey) private var playSounds = false
+    @AppStorage(Preferences.celebrateKey) private var celebrate = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Form {
@@ -33,6 +36,7 @@ struct SettingsView: View {
             Section("iPhone photos") {
                 Toggle("Automatically convert iPhone photos (HEIC) in Downloads to JPEG", isOn: $autoConvert)
                     .accessibilityHint("New HEIC photos that arrive in Downloads get a JPEG copy next to them")
+                    .accessibilityIdentifier("settings-auto-heic")
                 Picker("After converting, the original photo", selection: $original) {
                     Text("Stays where it is").tag(AutoConverter.Original.keep.rawValue)
                     Text("Moves to the Trash (you can put it back)").tag(AutoConverter.Original.trash.rawValue)
@@ -45,9 +49,26 @@ struct SettingsView: View {
             .onChange(of: autoConvert) { _, _ in AppDelegate.shared?.autoConverter.applySettings() }
 
             WheelSettingsSection()
+            Section("Fun") {
+                Toggle("Celebrate finished batches", isOn: $celebrate)
+                    .disabled(reduceMotion)
+                    .accessibilityHint("Shows a short confetti burst when all your files are done.")
+                    .accessibilityIdentifier("settings-celebrate")
+                if reduceMotion {
+                    Text("Off while Reduce Motion is on in System Settings › Accessibility. You'll still see a checkmark.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Toggle("Play sounds", isOn: $playSounds)
+                    .accessibilityHint("Plays a soft sound when files are added and when they're done.")
+                    .accessibilityIdentifier("settings-sounds")
+                    .onChange(of: playSounds) { _, on in if on { Feedback.play(.done) } }
+            }
 
             Section("Startup") {
                 Toggle("Open Ameya when I log in", isOn: $launchAtLogin)
+                    .accessibilityHint("Ameya starts quietly in the menu bar when you log in.")
+                    .accessibilityIdentifier("settings-login")
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
                 if let loginError {
                     Text(loginError).font(.caption).foregroundStyle(.secondary)
@@ -55,6 +76,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .tint(Theme.accent)
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
     }

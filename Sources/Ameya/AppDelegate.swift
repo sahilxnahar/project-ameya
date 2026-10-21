@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let store = JobStore()
     lazy var autoConverter = AutoConverter(store: store)
+    /// Batch headlines, Recent and Undo. Made at launch so it hears about every job.
+    lazy var results = ResultsModel(store: store)
     private let services = ServiceProvider()
 
     /// Set by SwiftUI views that can see `openWindow`; reopens the window after it was closed.
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = results
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
         autoConverter.applySettings()
@@ -45,6 +48,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let files = OpenedFiles.accepted(urls)
         integrationLog.info("Received \(files.count, privacy: .public) file(s), readable: \(files.allSatisfy { FileManager.default.isReadableFile(atPath: $0.path) }, privacy: .public)")
         store.add(files)
+        showMainWindow()
+    }
+
+    /// Edit → Paste (⌘V) when nothing focused takes it, e.g. a text field: adds the clipboard's
+    /// files or picture. Reached through the responder chain, so text fields keep normal paste.
+    @objc func paste(_ sender: Any?) {
+        ClipboardActions.convertClipboard()
+    }
+
+    /// Menu bar → "Welcome Tour…": shows the first-launch tour again.
+    func showWelcomeTour() {
+        UserDefaults.standard.set(false, forKey: Preferences.hasSeenOnboardingKey)
         showMainWindow()
     }
 

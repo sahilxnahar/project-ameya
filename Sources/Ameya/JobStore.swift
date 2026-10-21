@@ -1,4 +1,5 @@
 import AmeyaCore
+import Combine
 import Foundation
 
 /// A file waiting for the user to pick a target format.
@@ -36,6 +37,8 @@ final class Job: ObservableObject, Identifiable {
     let request: ConversionRequest
     /// The tool's name, for status text. `nil` for a plain conversion.
     let toolTitle: String?
+    /// Total size of the sources when the job was queued, for "62% smaller".
+    let sourceBytes: Int64
     @Published var state: State = .queued
     @Published var progress: Double = 0
     var task: Task<Void, Never>?
@@ -48,6 +51,9 @@ final class Job: ObservableObject, Identifiable {
         self.isFolder = isFolder
         self.request = request
         self.toolTitle = toolTitle
+        sourceBytes = sources.reduce(0) { total, url in
+            total + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        }
     }
 
     var target: FileFormat { request.target }
@@ -71,6 +77,8 @@ final class JobStore: ObservableObject {
     @Published private(set) var pending: [PendingFile] = []
     @Published private(set) var unsupported: [String] = []
     @Published private(set) var jobs: [Job] = []
+    /// Sent once for every job that ends (done, failed or cancelled). Results and Recent listen.
+    let finished = PassthroughSubject<Job, Never>()
 
     let matrix: ConversionMatrix
     let catalog: ToolCatalog
@@ -117,6 +125,11 @@ final class JobStore: ObservableObject {
                 unsupported.append(url.lastPathComponent)
             }
         }
+    }
+
+    func remove(_ file: PendingFile) {
+        pending.removeAll { $0.id == file.id }
+        file.url.stopAccessingSecurityScopedResource()
     }
 
     func clearPending() {
@@ -210,6 +223,7 @@ final class JobStore: ObservableObject {
         if job.state == .queued {
             job.state = .cancelled
             release(job)
+            finished.send(job)
         } else {
             job.task?.cancel()
         }
@@ -229,6 +243,7 @@ final class JobStore: ObservableObject {
     private func start(_ job: Job) {
         guard let worker else {
             job.state = .failed("The converter is missing from the app bundle.")
+            finished.send(job)
             return
         }
         let runner = WorkerRunner(executable: worker, timeout: job.timeout)
@@ -259,6 +274,7 @@ final class JobStore: ObservableObject {
     private func finish(_ job: Job) {
         running -= 1
         release(job)
+        finished.send(job)
         startQueuedJobs()
     }
 
