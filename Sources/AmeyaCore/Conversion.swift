@@ -8,6 +8,9 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var maxPixels: Int
     /// Upper bound on pages/frames read from one file.
     public var maxFrames: Int
+    /// Long side, in pixels, for images drawn from vectors (SVG). `nil` keeps the SVG's own size,
+    /// or 1024 px when it has none.
+    public var rasterLongSide: Int? = nil
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
@@ -80,6 +83,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case nonImagesSkipped
     case pagesBecamePictures
     case transcribedOnDevice
+    case externalResourcesSkipped
 
     public var message: String {
         switch self {
@@ -111,6 +115,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
         case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
         case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
+        case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
         }
     }
 }

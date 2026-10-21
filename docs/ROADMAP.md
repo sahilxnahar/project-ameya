@@ -187,6 +187,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Family | Converts | Notes |
 |---|---|---|
 | Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, WebP (still and animated), JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
+| Vector | SVG and SVGZ → every image format above (transparent) and → PDF (vector, text kept as text) | Rendered by the system SVG engine (CoreSVG); 1024 px long side when the SVG has no size; outside links dropped |
 | Icons | Any image → ICO (16–256 px) and ICNS (16–1024 px), all standard sizes in one file | Padded to a square, centred |
 | Markdown | Markdown ↔ HTML, DOCX, DOC, RTF, ODT, TXT, and → PDF; PDF → Markdown | Headings, lists, tables, code, links, bold/italic. Apple's DOCX writer drops links |
 | Archives | ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, 7-Zip ↔ each other; RAR in | Unsafe paths, escaping links and zip bombs are blocked |
@@ -217,7 +218,7 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | ICO, ICNS, favicon set, iOS/macOS app-icon set | ✔ | ✔ | IIO + Own | P0 |
 | PDF (page ↔ image) | ✔ | ✔ | PK | P0 |
 | RAW: DNG, CR2/CR3, NEF, ARW, RAF, ORF, RW2 | ✔ | — | Core Image RAW | P0 |
-| SVG | ✔ | ✔ (traced) | WK render / Own trace | P1 |
+| SVG, SVGZ | ✔ | ✔ (traced) | CoreSVG render (done) / Own trace | P1 |
 | JPEG XL | ✔ | ✔ | IIO (where supported) | P1 |
 | Live Photo → MOV/GIF | ✔ | — | AV | P1 |
 | HDR → SDR tone mapping, CMYK for print, P3 ↔ sRGB | ✔ | ✔ | Core Image / ColorSync | P1 |

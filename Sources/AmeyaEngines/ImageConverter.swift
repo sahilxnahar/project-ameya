@@ -44,10 +44,20 @@ public enum ImageConverter {
         request: ConversionRequest,
         progress: (Double) -> Void = { _ in }
     ) throws -> (Data, ConversionResult) {
-        let decoded = try ImageDecoder.decode(data, options: request.options)
-        progress(0.4)
         let target = request.target
         var notes: [ConversionNote] = []
+        let decoded: DecodedImage
+        if request.source == .svg || (request.source == nil && SVGRenderer.looksLikeSVG(data)) {
+            if target == .pdf { // drawn straight into the PDF so it stays vector
+                let (pdf, svgNotes) = try SVGRenderer.pdf(data, options: request.options)
+                progress(1)
+                return (pdf, ConversionResult(outputBytes: pdf.count, frames: 1, notes: svgNotes))
+            }
+            (decoded, notes) = try SVGRenderer.decode(data, options: request.options)
+        } else {
+            decoded = try ImageDecoder.decode(data, options: request.options)
+        }
+        progress(0.4)
 
         // Decide which frames survive in the target format.
         var frames = decoded.frames
