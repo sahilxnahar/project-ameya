@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Ameya.Core.Conversion;
 using Ameya.Core.Files;
