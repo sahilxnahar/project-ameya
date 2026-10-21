@@ -109,11 +109,22 @@ jobs:
         shell: pwsh
         run: |
           $package = Get-ChildItem dist -Filter 'Ameya.App_*_x64*.msix' | Select-Object -First 1
-          $dependencies = Get-ChildItem windows/artifacts/packages -Recurse -Include '*.msix', '*.appx' |
-            Where-Object { $_.FullName -match '\\Dependencies\\x64\\' } | ForEach-Object FullName
-          Write-Host "Dependencies: $dependencies"
-          if ($dependencies) { Add-AppxPackage -Path $package.FullName -DependencyPath $dependencies }
-          else { Add-AppxPackage -Path $package.FullName }
+          if (-not $package) { throw "no signed x64 MSIX in dist" }
+          # Only the x64 package's own Dependencies\x64 folder: the ARM64 package folder carries the
+          # same x64 runtime too, and passing one framework twice fails with 0x80073CF9.
+          $folder = Get-ChildItem windows/artifacts/packages -Directory -Filter 'Ameya.App_*_x64*' | Select-Object -First 1
+          $dependencies = @(Get-ChildItem (Join-Path $folder.FullName 'Dependencies\x64') -Include '*.msix', '*.appx' -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object Name -Unique | ForEach-Object FullName)
+          Write-Host "Package: $($package.FullName)"
+          Write-Host "Dependencies: $($dependencies -join ', ')"
+          try {
+            if ($dependencies.Count -gt 0) { Add-AppxPackage -Path $package.FullName -DependencyPath $dependencies -ErrorAction Stop }
+            else { Add-AppxPackage -Path $package.FullName -ErrorAction Stop }
+          } catch {
+            Write-Host $_
+            if ("$_" -match '\[ActivityId\]\s+([0-9a-fA-F-]+)') { Get-AppPackageLog -ActivityID $Matches[1] | Format-List | Out-String -Width 300 | Write-Host }
+            throw
+          }
           Get-AppxPackage -Name 'ProjectAmeya.Ameya' | Format-List Name, Version, InstallLocation
           $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\Ameya.exe'
           $out = Join-Path $env:RUNNER_TEMP packaged-selftest.txt
