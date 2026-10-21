@@ -71,6 +71,7 @@ struct ToolCatalog {
 
     init(writable: Set<FileFormat>) {
         tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
+            + Self.sizePresetTools(writable: writable) // SizePresets.swift
     }
 
     /// Tools offered for these files, in catalog order.
@@ -116,11 +117,6 @@ struct ToolCatalog {
                  help: "Makes a copy no wider or taller than 2048 pixels.",
                  outputSuffix: "(smaller)", isAvailable: editable,
                  makeRequest: edit(ImageEdits(maxPixelSize: 2048))),
-            Tool(id: "image.under200KB", title: "Under 200 KB", systemImage: "scalemass",
-                 help: "Makes a JPEG copy of 200 KB or less, for upload forms.",
-                 outputSuffix: "(under 200 KB)",
-                 isAvailable: { editable($0) && writable.contains(.jpeg) },
-                 makeRequest: edit(ImageEdits(targetBytes: 200_000), to: { _ in .jpeg })),
         ]
     }
 

@@ -86,8 +86,10 @@ public enum PDFTools {
             progress(1)
             return ([output], result(for: [output], pages: reordered.pageCount, named: false))
 
-        case .compress:
-            throw ConversionError.notAvailableYet("Making PDFs smaller")
+        case .compress(let quality, let targetBytes): // see PDFCompressor.swift
+            let (output, pages, notes) = try PDFCompressor.compress(input: inputs[0], quality: quality, targetBytes: targetBytes,
+                                                                    scratch: scratch, progress: progress)
+            return ([output], ConversionResult(outputBytes: VideoEditor.fileSize(output), frames: pages, notes: notes))
 
         case .ocr:
             throw ConversionError.notAvailableYet("Making scanned PDFs searchable")

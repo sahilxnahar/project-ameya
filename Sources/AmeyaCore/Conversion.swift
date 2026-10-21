@@ -162,6 +162,12 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case passportFaceTurned
     case passportEyesMayBeClosed
     case passportCheckRules
+    // Size presets and video edits
+    case trimmed
+    case muted
+    case videoMadeSmaller
+    case alreadySmallEnough
+    case pdfPagesRecompressed
 
     public var message: String {
         switch self {
@@ -219,6 +225,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .passportFaceTurned: "Your face seems turned away. Most countries need you to look straight at the camera."
         case .passportEyesMayBeClosed: "Your eyes may be closed. Most countries need your eyes open."
         case .passportCheckRules: "Rules differ between offices and change over time: check the official requirements before you submit."
+        case .trimmed: "The video was trimmed to the chosen start and end."
+        case .muted: "The sound was removed."
+        case .videoMadeSmaller: "The video was re-encoded to make it smaller, so some detail is lost."
+        case .alreadySmallEnough: "It was already small enough, so it was kept as it was."
+        case .pdfPagesRecompressed: "Pages that are mostly pictures were saved as smaller JPEG pictures; text pages are unchanged."
         }
     }
 }
