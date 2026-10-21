@@ -50,7 +50,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Job queue: parallel jobs, progress, per-job timeout, hard cancel, crash isolation | P0 | ✅ |
 | Safe output: never overwrite (RENAME_EXCL), unique names, atomic write, source opened read-only | P0 | ✅ |
 | Save to Downloads/Ameya | P0 | ✅ |
-| Save beside the original (sandbox "related items") or a chosen folder | P0 | ⬜ |
+| Save beside the original (sandbox "related items") or a chosen folder | P0 | 🚧 |
 | Capability matrix: only offer conversions this Mac can do; warn about losses before converting | P0 | ✅ |
 | Animated and multi-page images handled frame by frame; EXIF orientation applied | P0 | ✅ |
 | Decompression-bomb guard (pixel and frame limits checked before decoding) | P0 | ✅ |
@@ -64,10 +64,10 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Menu bar icon + drop window (basic; design pass pending) | P0 | 🚧 |
 | Global drag wheel (hold Shift/Command/Control while dragging), remappable keys | P0 | ⬜ |
 | Keyboard command palette (full keyboard and VoiceOver access) | P0 | ⬜ |
-| Finder right-click Quick Actions + macOS Services | P0 | ⬜ |
+| Finder right-click Quick Actions + macOS Services | P0 | 🚧 |
 | Shortcuts / App Intents for every action | P0 | ⬜ |
 | Suggested actions: likeliest actions for this file shown first | P1 | ⬜ |
-| Clipboard conversion: convert what's copied, paste the result | P1 | ⬜ |
+| Clipboard conversion: convert what's copied, paste the result | P1 | ✅ |
 | `ameya` command-line tool | P1 | ⬜ |
 | Local MCP server so AI agents can convert files on the Mac | P1 | ⬜ |
 | Shelf: collect files from several places, then act | P1 | ⬜ |
@@ -198,6 +198,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
 | E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
 | Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
+| Mac integration | Open With / drop on the Dock icon; Finder → Services → "Convert with Ameya" and "Convert to JPEG with Ameya"; menu bar "Convert Clipboard…" and "Copy Clipboard Picture As JPEG/PNG/PDF"; optional auto-convert of new HEIC photos in Downloads to JPEG; save to Downloads/Ameya or a chosen folder; open at login | Never the default app (Viewer, Alternate). Auto-convert is off by default, waits until a file has stopped growing for 2 s, writes the JPEG beside the photo, and only moves the original to the Trash if asked. A chosen folder is remembered with a security-scoped bookmark |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
