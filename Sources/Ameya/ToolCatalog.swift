@@ -72,6 +72,7 @@ struct ToolCatalog {
     init(writable: Set<FileFormat>) {
         tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
             + Self.sizePresetTools(writable: writable) + Self.pdfToolbox() // SizePresets.swift, PDFToolbox
+            + Self.privacyTools(writable: writable) // PrivacyTools.swift
     }
 
     /// Tools offered for these files, in catalog order.

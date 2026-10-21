@@ -89,7 +89,10 @@ public enum RenamePlanner {
         var rest = Substring(pattern)
         while let open = rest.firstIndex(of: "{") {
             result += rest[..<open]
-            guard let close = rest[open...].firstIndex(of: "}") else { break }
+            guard let close = rest[open...].firstIndex(of: "}") else {
+                rest = rest[open...] // an unclosed brace is kept as typed
+                break
+            }
             let token = Token(String(rest[rest.index(after: open)..<close]))
             result += value(of: token, item: item, stem: stem, ext: ext, number: number, timeZone: timeZone)
                 ?? String(rest[open...close])
