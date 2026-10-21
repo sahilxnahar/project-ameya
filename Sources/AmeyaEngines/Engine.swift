@@ -26,6 +26,10 @@ public enum Engine {
         case _ where source.isBookOrComic || target.isBookOrComic:
             (notes, frames) = try BookConverter.convert(input: input, from: source, to: target, output: output,
                                                         options: request.options, progress: progress)
+        case _ where ConversionMatrix.isTranscription(from: source, to: target):
+            notes = try await Transcriber.convert(
+                input: input, to: target, output: output, scratch: scratch, options: request.options, progress: progress
+            )
 
         case (.image, .image), (.image, .document), (.document, .image):
             let (data, result) = try ImageConverter.convert(try read(input), request: request, progress: progress)

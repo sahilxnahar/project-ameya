@@ -97,7 +97,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Trim, split, crop, change speed, join | P0 | ⬜ |
 | Compress with size presets (email, WhatsApp, Discord 10 MB) | P0 | ⬜ |
 | Extract audio, save frames, thumbnail grid, video → GIF with size target | P0 | ⬜ |
-| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | ⬜ |
+| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | 🚧 SRT/VTT done; burn-in to do |
 | Redact video (blur regions, auto-blur faces) | P1 | ⬜ |
 | Auto-cut silences | P1 | ⬜ |
 | Landscape → vertical 9:16 following the subject | P1 | ⬜ |
@@ -109,7 +109,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 |---|---|---|
 | Trim, merge, fade, normalise loudness (incl. −16 LUFS podcast preset) | P0 | ⬜ |
 | Channels (mono/stereo/swap), speed and pitch | P0 | ⬜ |
-| Transcribe to text | P0 | ⬜ |
+| Transcribe to text | P0 | ✅ |
 | Bleep words, voice isolation / noise removal | P1 | ⬜ |
 | Ringtone maker (.m4r), trim silence, audio visualiser video | P1 | ⬜ |
 | BPM and key detection | P2 | ⬜ |
@@ -198,6 +198,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Data | CSV, TSV, JSON, property list (XML and binary), XML ↔ each other; → YAML, XLSX, HTML table, Markdown table | Own code + Foundation. Nested JSON flattened to "a.b" columns; `;` CSV detected; XLSX is one sheet |
 | E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
 | Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
+| Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only, with language models already on the Mac (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); never downloads; captions ≤ 2 × 42 chars, ≤ 7 s |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 

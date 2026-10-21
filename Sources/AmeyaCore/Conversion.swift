@@ -11,6 +11,8 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
+    /// Spoken language for transcription, as a BCP-47 tag such as "en-GB". `nil` uses the Mac's language.
+    public var language: String?
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -20,13 +22,15 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         maxPixels: Int = ConversionOptions.defaultMaxPixels,
         maxFrames: Int = ConversionOptions.defaultMaxFrames,
         debugDelaySeconds: Double? = nil,
-        debugCrash: Bool? = nil
+        debugCrash: Bool? = nil,
+        language: String? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
         self.maxFrames = maxFrames
         self.debugDelaySeconds = debugDelaySeconds
         self.debugCrash = debugCrash
+        self.language = language
     }
 }
 
@@ -75,6 +79,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case imagesDropped
     case nonImagesSkipped
     case pagesBecamePictures
+    case transcribedOnDevice
 
     public var message: String {
         switch self {
@@ -105,6 +110,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .imagesDropped: "Some pictures couldn't be found in the file and were left out."
         case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
         case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
+        case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
         }
     }
 }
@@ -141,6 +147,7 @@ public struct ConversionMatrix: Sendable {
     public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
         guard source != target else { return false }
         if let route = bookRoute(from: source, to: target) { return route }
+        if isTranscription(from: source, to: target) { return true }
         switch (source.family, target.family) {
         case (.image, .image): return true
         case (.image, .document): return target == .pdf
@@ -168,6 +175,11 @@ public struct ConversionMatrix: Sendable {
         return notes
     }
 
+    /// Speech in an audio or video file becomes a plain transcript or timed captions.
+    public static func isTranscription(from source: FileFormat, to target: FileFormat) -> Bool {
+        (source.family == .audio || source.family == .video) && [.txt, .srt, .vtt].contains(target)
+    }
+
     /// Targets every one of the given sources can be converted to.
     public func commonTargets(for sources: [FileFormat]) -> [FileFormat] {
         guard let first = sources.first else { return [] }
@@ -180,6 +192,7 @@ public struct ConversionMatrix: Sendable {
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
         if let notes = Self.bookLosses(from: source, to: target) { return notes }
+        if Self.isTranscription(from: source, to: target) { return [.transcribedOnDevice] }
         switch (source.family, target.family) {
         case (.document, .document) where source == .pdf:
             return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]
