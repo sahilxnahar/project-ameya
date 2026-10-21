@@ -39,6 +39,10 @@ enum Snapshots {
 
         store.add(files)
         ok = await render(main(), "files-added", size: CGSize(width: 560, height: 760), in: folder) && ok
+        // The menu bar panel (MenuBar/), with the same files waiting.
+        let panel = MenuBarPanel().environmentObject(store).environmentObject(results).environmentObject(MenuBarModel())
+        ok = await render(panel, "menubar-panel", size: MenuBarPanel.size, in: folder) && ok
+        ok = await render(panel, "menubar-panel-dark", size: MenuBarPanel.size, dark: true, in: folder) && ok
 
         let jobs = store.convertNow(files, to: .jpeg, in: output)
         store.clearPending()

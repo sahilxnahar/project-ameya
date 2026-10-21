@@ -6,33 +6,6 @@
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Ameya</string>
-	<key>CFBundleExecutable</key>
-	<string>Ameya</string>
-	<key>CFBundleIdentifier</key>
-	<string>io.github.sahilxnahar.ameya</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>Ameya</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
-	<key>CFBundleVersion</key>
-	<string>1</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.utilities</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>NSHumanReadableCopyright</key>
-	<string>Project Ameya contributors. MPL-2.0.</string>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ameya transcribes audio and video into text and captions. Recognition runs on this Mac; your audio is never uploaded.</string>
-	<key>NSSupportsAutomaticTermination</key>
-	<false/>
-	<!-- "Open With" and Dock drop. Viewer + Alternate: Ameya is offered, never made the default app. -->
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -138,13 +111,6 @@
 			</array>
 		</dict>
 		<dict>
-			<!-- No system type exists for these; matched by extension. -->
-			<key>CFBundleTypeName</key>
-			<string>Subtitles and Comics</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
 			<key>CFBundleTypeExtensions</key>
 			<array>
 				<string>srt</string>
@@ -152,9 +118,38 @@
 				<string>cbz</string>
 				<string>cbr</string>
 			</array>
+			<key>CFBundleTypeName</key>
+			<string>Subtitles and Comics</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
 		</dict>
 	</array>
-	<!-- Finder: right-click → Services (or Quick Actions). -->
+	<key>CFBundleExecutable</key>
+	<string>Ameya</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.sahilxnahar.ameya</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Ameya</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Project Ameya contributors. MPL-2.0.</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
@@ -192,5 +187,9 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ameya transcribes audio and video into text and captions. Recognition runs on this Mac; your audio is never uploaded.</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<false/>
 </dict>
 </plist>

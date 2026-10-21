@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 
 /// Three short steps on first launch. Skippable (Escape), keyboard-driven (← →, Return).
@@ -6,6 +7,7 @@ struct OnboardingView: View {
     @State private var page = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var focused: Bool
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     struct Page {
         let symbol: String
@@ -16,7 +18,7 @@ struct OnboardingView: View {
     static let pages = [
         Page(symbol: "tray.and.arrow.down",
              title: "Drop it in",
-             text: "Drag files onto Ameya, or press ⌘O to choose them. Pasting with ⌘V works too."),
+             text: "Ameya lives in the menu bar. Drop files on its icon, or press ⌃⌥Space from any app. In this window, ⌘O and ⌘V work too."),
         Page(symbol: "wand.and.stars",
              title: "Pick what you want",
              text: "Choose a format like JPEG or MP3, or a tool like “Make it smaller”. The likeliest choices come first, and you can type to find any format."),
@@ -63,6 +65,21 @@ struct OnboardingView: View {
             .accessibilityLabel("Step \(page + 1) of \(Self.pages.count). \(current.title). \(current.text)")
 
             Spacer(minLength: 0)
+
+            if isLast {
+                // A menu bar app is most useful when it's always there. Off unless chosen.
+                Toggle("Open Ameya when I log in", isOn: $launchAtLogin)
+                    .toggleStyle(.checkbox)
+                    .accessibilityHint("Ameya starts quietly in the menu bar when you log in. You can change this in Settings.")
+                    .accessibilityIdentifier("onboarding-login")
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        do {
+                            if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            launchAtLogin = SMAppService.mainApp.status == .enabled
+                        }
+                    }
+            }
 
             HStack(spacing: 7) {
                 ForEach(0..<Self.pages.count, id: \.self) { index in

@@ -48,6 +48,7 @@ struct SettingsView: View {
             }
             .onChange(of: autoConvert) { _, _ in AppDelegate.shared?.autoConverter.applySettings() }
 
+            MenuBarSettingsSection() // MenuBar/
             WheelSettingsSection()
             Section("Fun") {
                 Toggle("Celebrate finished batches", isOn: $celebrate)
