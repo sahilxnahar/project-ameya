@@ -104,6 +104,12 @@ final class ResultsModel: ObservableObject {
         Feedback.announce("Recent list cleared. Your files are still where they were.")
     }
 
+    /// Recent files not already listed under Results.
+    func olderRecent(than jobs: [Job]) -> [RecentFile] {
+        let current = Set(jobs.map(\.destination.path))
+        return recent.items.filter { !current.contains($0.path) }
+    }
+
     func exists(_ file: RecentFile) -> Bool {
         FileManager.default.fileExists(atPath: file.path)
     }

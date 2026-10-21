@@ -6,6 +6,10 @@ import SwiftUI
 if CommandLine.arguments.contains("--self-test") {
     exit(await SelfTest.run() ? 0 : 1)
 }
+// `Ameya --snapshots` renders the main views to PNGs (for docs/screenshots) and exits.
+if CommandLine.arguments.contains("--snapshots") {
+    exit(await Snapshots.run() ? 0 : 1)
+}
 
 AmeyaApp.main()
 

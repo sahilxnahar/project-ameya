@@ -29,7 +29,7 @@ struct ConfettiBurst: View {
     let trigger: Int
     @State private var start: Date?
     private let duration: TimeInterval = 1.4
-    private let pieces: [Piece] = (0..<44).map { _ in Piece() }
+    @State private var pieces: [Piece] = (0..<44).map { _ in Piece() }
 
     struct Piece {
         let angle = Double.random(in: -.pi * 0.95 ... -.pi * 0.05)
@@ -63,12 +63,17 @@ struct ConfettiBurst: View {
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onChange(of: trigger) { _, _ in
-            start = Date()
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(duration))
-                start = nil
-            }
+        // The burst is shown when a batch finishes: either it appears then, or the trigger changes.
+        .onAppear(perform: burst)
+        .onChange(of: trigger) { _, _ in burst() }
+    }
+
+    private func burst() {
+        let now = Date()
+        start = now
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(duration))
+            if start == now { start = nil }
         }
     }
 }

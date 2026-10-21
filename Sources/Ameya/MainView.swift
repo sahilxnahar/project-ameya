@@ -34,7 +34,7 @@ struct MainView: View {
                     }
                     if !store.unsupported.isEmpty { unsupportedNote }
                     if !store.jobs.isEmpty { ResultsSection(preview: $preview) }
-                    if !results.recent.items.isEmpty { RecentSection(preview: $preview) }
+                    if !results.olderRecent(than: store.jobs).isEmpty { RecentSection(preview: $preview) }
                 }
                 .padding(20)
                 .animation(Theme.arrival(reduceMotion: reduceMotion), value: store.pending.map(\.id))
@@ -64,9 +64,11 @@ struct MainView: View {
         .quickLookPreview($preview)
         .background {
             // ⌘O works wherever focus is, even when the big button isn't on screen.
+            // (Invisible but present: hidden views don't receive keyboard shortcuts.)
             Button("Choose Files…") { isImporting = true }
                 .keyboardShortcut("o")
-                .hidden()
+                .opacity(0)
+                .frame(width: 0, height: 0)
                 .accessibilityHidden(true)
         }
     }

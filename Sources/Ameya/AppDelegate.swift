@@ -49,6 +49,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showMainWindow()
     }
 
+    /// Edit → Paste (⌘V) when nothing focused takes it, e.g. a text field: adds the clipboard's
+    /// files or picture. Reached through the responder chain, so text fields keep normal paste.
+    @objc func paste(_ sender: Any?) {
+        ClipboardActions.convertClipboard()
+    }
+
     /// Menu bar → "Welcome Tour…": shows the first-launch tour again.
     func showWelcomeTour() {
         UserDefaults.standard.set(false, forKey: Preferences.hasSeenOnboardingKey)

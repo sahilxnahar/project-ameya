@@ -5,6 +5,7 @@ import SwiftUI
 /// Files Ameya made before, kept across launches (paths and sizes only).
 struct RecentSection: View {
     @EnvironmentObject private var results: ResultsModel
+    @EnvironmentObject private var store: JobStore
     @Binding var preview: URL?
     @AppStorage("recentExpanded") private var expanded = true
     @State private var problem: String?
@@ -12,7 +13,7 @@ struct RecentSection: View {
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 4) {
-                ForEach(results.recent.items.prefix(8)) { file in
+                ForEach(results.olderRecent(than: store.jobs).prefix(8)) { file in
                     RecentRow(file: file, preview: $preview, problem: $problem)
                 }
                 if let problem {
