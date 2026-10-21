@@ -36,6 +36,7 @@ enum ImageEditor {
             frame.metadata = applyPolicy(edits.metadata, to: frame.metadata)
             return frame
         }
+        notes += try PhotoEffects.apply(edits, to: &frames) // photo tools (PhotoEffects.swift)
         if resized { notes.append(.resized) }
         switch edits.metadata {
         case .keep: break

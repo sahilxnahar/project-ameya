@@ -175,6 +175,9 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case textRecognisedFromScans
     case textRecognisedInPicture
     case keepPasswordSafe
+    // Photo tools
+    case redactionBurnedIn
+    case backgroundRemoved
 
     public var message: String {
         switch self {
@@ -241,6 +244,8 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .textRecognisedFromScans: "Text was recognised from scanned pages; check names and numbers."
         case .textRecognisedInPicture: "The text was recognised on this Mac; check names and numbers."
         case .keepPasswordSafe: "Keep the password somewhere safe: Ameya can't recover a forgotten one."
+        case .redactionBurnedIn: "The chosen areas are covered for good, and hidden details such as location, camera details and thumbnails were removed."
+        case .backgroundRemoved: "The background was removed. Check the edges around hair and fine details."
         }
     }
 }

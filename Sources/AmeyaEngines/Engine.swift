@@ -17,6 +17,7 @@ public enum Engine {
         scratch: URL,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> (outputs: [URL], result: ConversionResult) {
+        let (inputs, request) = try PhotoEffects.attachLogo(inputs: inputs, request: request) // logo watermark
         if let passport = request.options.passport {
             guard inputs.count == 1 else { throw ConversionError.invalidData("passport photos take one photo at a time") }
             return try PassportPhoto.run(passport, input: inputs[0], request: request, scratch: scratch, progress: progress)

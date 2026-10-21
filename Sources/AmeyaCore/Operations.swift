@@ -23,6 +23,13 @@ public struct ImageEdits: Codable, Sendable, Equatable {
     public var metadata: MetadataPolicy
     /// Aim for an output at or under this many bytes (lossy formats), e.g. a portal's upload limit.
     public var targetBytes: Int?
+    /// Photo tools (PhotoToolOptions.swift), applied after the geometry above, in this order.
+    public var adjustments: PhotoAdjustments? = nil
+    public var redaction: Redaction? = nil
+    public var removeBackground: BackgroundRemoval? = nil
+    public var annotations: [Annotation]? = nil
+    public var watermark: Watermark? = nil
+    public var beautify: Beautify? = nil
 
     public init(
         crop: UnitRect? = nil,
