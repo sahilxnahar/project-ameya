@@ -16,13 +16,16 @@ struct AmeyaApp: App {
         Window("Ameya", id: "main") {
             MainView()
                 .environmentObject(delegate.store)
+                .environmentObject(delegate.results)
                 .background(WindowOpenerCapture())
         }
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 560, height: 640)
 
         MenuBarExtra("Ameya", systemImage: "arrow.triangle.2.circlepath") {
             MenuBarContent()
                 .environmentObject(delegate.store)
+                .environmentObject(delegate.results)
         }
 
         Settings {
@@ -31,8 +34,10 @@ struct AmeyaApp: App {
     }
 }
 
+/// The menu bar menu. Every item is plain text, so VoiceOver reads it as written.
 struct MenuBarContent: View {
     @EnvironmentObject private var store: JobStore
+    @EnvironmentObject private var results: ResultsModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -50,10 +55,25 @@ struct MenuBarContent: View {
             Button("PDF") { ClipboardActions.copy(as: .pdf) }
         }
         Divider()
+        Menu("Recent") {
+            let recent = results.recent.items.prefix(8)
+            if recent.isEmpty {
+                Text("Nothing yet")
+            } else {
+                ForEach(Array(recent)) { file in
+                    Button(file.name) { NSWorkspace.shared.open(file.url) }
+                        .disabled(!results.exists(file))
+                }
+                Divider()
+                Button("Clear Recent") { results.clearRecent() }
+            }
+        }
         Button("Show Converted Files") {
             try? FileManager.default.createDirectory(at: store.outputDirectory, withIntermediateDirectories: true)
             NSWorkspace.shared.open(store.outputDirectory)
         }
+        Divider()
+        Button("Welcome Tour…") { AppDelegate.shared?.showWelcomeTour() }
         SettingsLink { Text("Settings…") }
             .keyboardShortcut(",")
         Divider()
