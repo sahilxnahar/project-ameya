@@ -88,13 +88,15 @@ public enum ImageConverter {
             }
         }
 
+        // Flatten whenever an alpha channel exists, but only say so if something was really see-through.
         if !target.supportsAlpha && frames.contains(where: { $0.image.hasAlpha }) {
+            let transparent = frames.contains(where: { $0.image.hasTransparentPixels })
             frames = try frames.map { frame in
                 var flat = frame
                 flat.image = try flattenOnWhite(frame.image)
                 return flat
             }
-            notes.append(.transparencyFilledWhite)
+            if transparent { notes.append(.transparencyFilledWhite) }
         }
 
         if target.isIcon {
@@ -230,6 +232,34 @@ public enum ImageConverter {
 }
 
 extension CGImage {
+    /// True only if some pixel is not fully opaque. Decoders often attach an alpha channel to photos
+    /// that are completely opaque, so the channel alone proves nothing. Scans a ≤ 256 px copy.
+    var hasTransparentPixels: Bool {
+        guard hasAlpha else { return false }
+        let scale = min(1, 256 / Double(max(width, height)))
+        let w = max(1, Int((Double(width) * scale).rounded()))
+        let h = max(1, Int((Double(height) * scale).rounded()))
+        var buffer = [UInt8](repeating: 0, count: w * h * 4)
+        let drawn = buffer.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.interpolationQuality = .high // averages alpha, so thin transparent areas still show up
+            context.draw(self, in: CGRect(x: 0, y: 0, width: w, height: h))
+            return true
+        }
+        // If the scan couldn't run, assume the worst so the note is never hidden wrongly.
+        guard drawn else { return true }
+        var index = 3
+        while index < buffer.count {
+            if buffer[index] != 255 { return true }
+            index += 4
+        }
+        return false
+    }
+
     var hasAlpha: Bool {
         switch alphaInfo {
         case .none, .noneSkipFirst, .noneSkipLast: false
