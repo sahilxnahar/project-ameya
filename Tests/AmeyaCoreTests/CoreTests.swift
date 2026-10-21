@@ -291,7 +291,7 @@ struct SVGFormatTests {
     }
 
     @Test func otherXMLIsNotSVG() {
-        #expect(FileFormat.sniff(Data(#"<?xml version="1.0"?><plist><svg/></plist>"#.utf8)) == nil)
+        #expect(FileFormat.sniff(Data(#"<?xml version="1.0"?><plist><svg/></plist>"#.utf8)) != .svg) // an XML plist is detected as .plist by the data engine
         #expect(FileFormat.sniff(Data("<svgx>".utf8)) == nil)
         #expect(FileFormat.sniff(Data("hello <svg>".utf8)) == nil)
         #expect(FileFormat.detect(header: Data("<html><svg/></html>".utf8), fileExtension: "svg") == .html)
