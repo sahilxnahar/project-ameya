@@ -18,7 +18,7 @@ public enum TranscriptionError: Error, Equatable, LocalizedError {
         case .languageUnsupported(let language):
             "This Mac can't transcribe \(language) on-device."
         case .modelNotInstalled(let language):
-            "The speech model for \(language) isn't installed yet. Ameya asks macOS to download it the first time; check your internet connection and try again."
+            "Speech recognition for \(language) isn't set up on this Mac yet. Turn on Dictation for \(language) in System Settings → Keyboard → Dictation, then try again."
         case .recognizerUnavailable:
             "On-device speech recognition isn't available on this Mac right now."
         case .noSpeech:
@@ -29,8 +29,8 @@ public enum TranscriptionError: Error, Equatable, LocalizedError {
 
 /// Audio or video → plain transcript (TXT) or timed captions (SRT, WebVTT), entirely on this Mac.
 ///
-/// macOS 26 and later use `SpeechAnalyzer` + `SpeechTranscriber` (no permission prompt; the
-/// language model is a system asset). Earlier systems use `SFSpeechRecognizer` with
+/// macOS 26 and later use `SpeechAnalyzer` + `SpeechTranscriber` (no permission prompt). Only
+/// language models already on the Mac are used: Ameya never asks macOS to download one. Earlier systems use `SFSpeechRecognizer` with
 /// `requiresOnDeviceRecognition`, which needs the user's speech-recognition permission and is
 /// fed one-minute chunks cut at quiet moments. Audio never leaves the Mac either way.
 enum Transcriber {
@@ -252,6 +252,21 @@ enum Transcriber {
         return try await LegacyRecogniser.recognise(audio, locale: requested, progress: progress)
     }
 
+    /// The installed locale that best fits the request: the exact tag, then the same language
+    /// and region, then the same language (US first, else alphabetical). `nil` if the language
+    /// isn't installed at all.
+    static func installedMatch(for requested: Locale, among installed: [Locale]) -> Locale? {
+        let tag = requested.identifier(.bcp47).lowercased()
+        if let exact = installed.first(where: { $0.identifier(.bcp47).lowercased() == tag }) { return exact }
+        guard let language = requested.language.languageCode else { return nil }
+        let sameLanguage = installed
+            .filter { $0.language.languageCode == language }
+            .sorted { $0.identifier(.bcp47) < $1.identifier(.bcp47) }
+        if let region = requested.region,
+           let sameRegion = sameLanguage.first(where: { $0.region == region }) { return sameRegion }
+        return sameLanguage.first { $0.region == .unitedStates } ?? sameLanguage.first
+    }
+
     static func languageName(_ locale: Locale) -> String {
         Locale.current.localizedString(forIdentifier: locale.identifier) ?? locale.identifier
     }
@@ -266,24 +281,12 @@ enum AnalyzerRecogniser {
         locale requested: Locale,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> [Transcriber.Word] {
-        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
-            throw TranscriptionError.languageUnsupported(Transcriber.languageName(requested))
+        // Only models already installed on this Mac. Ameya never triggers a download.
+        let installed = Array(await SpeechTranscriber.installedLocales)
+        guard let locale = Transcriber.installedMatch(for: requested, among: installed) else {
+            throw TranscriptionError.modelNotInstalled(Transcriber.languageName(requested))
         }
         let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [], attributeOptions: [.audioTimeRange])
-        // The worker has no network access. The app installs the model before starting the job
-        // (see SpeechSetup); if that didn't happen, ask once more and report clearly if it fails.
-        if await AssetInventory.status(forModules: [transcriber]) != .installed {
-            do {
-                if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
-                    try await request.downloadAndInstall()
-                }
-            } catch {
-                throw TranscriptionError.modelNotInstalled(Transcriber.languageName(locale))
-            }
-            guard await AssetInventory.status(forModules: [transcriber]) == .installed else {
-                throw TranscriptionError.modelNotInstalled(Transcriber.languageName(locale))
-            }
-        }
 
         let file = try AVAudioFile(forReading: audio)
         let analyzer = SpeechAnalyzer(modules: [transcriber])
@@ -331,7 +334,7 @@ enum LegacyRecogniser {
             throw TranscriptionError.languageUnsupported(Transcriber.languageName(locale))
         }
         guard recognizer.supportsOnDeviceRecognition else {
-            throw TranscriptionError.languageUnsupported(Transcriber.languageName(locale))
+            throw TranscriptionError.modelNotInstalled(Transcriber.languageName(locale))
         }
         guard recognizer.isAvailable else { throw TranscriptionError.recognizerUnavailable }
 

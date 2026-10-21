@@ -101,6 +101,28 @@ struct TranscriberTests {
         #expect((700..<720).contains(cut))
     }
 
+    @Test func usesOnlyInstalledLanguageModels() {
+        let installed = ["en_GB", "en_IN", "en_US", "fr_FR"].map { Locale(identifier: $0) }
+        func match(_ tag: String) -> String? {
+            Transcriber.installedMatch(for: Locale(identifier: tag), among: installed)?.identifier(.bcp47)
+        }
+        #expect(match("en-IN") == "en-IN")
+        #expect(match("en_GB") == "en-GB")
+        #expect(match("en") == "en-US")
+        #expect(match("en-AU") == "en-US")
+        #expect(match("fr-CA") == "fr-FR")
+        #expect(match("de-DE") == nil)
+        #expect(Transcriber.installedMatch(for: Locale(identifier: "en-US"), among: []) == nil)
+    }
+
+    @Test func missingLanguageMessageIsActionableAndOffline() {
+        let message = TranscriptionError.modelNotInstalled("German (Germany)").errorDescription ?? ""
+        #expect(message.contains("German (Germany)"))
+        #expect(message.contains("System Settings → Keyboard → Dictation"))
+        #expect(!message.lowercased().contains("internet"))
+        #expect(!message.lowercased().contains("download"))
+    }
+
     @Test func matrixOffersTranscriptsForAudioAndVideo() {
         #expect(ConversionMatrix.canConvert(from: .mp3, to: .srt))
         #expect(ConversionMatrix.canConvert(from: .mov, to: .vtt))
@@ -141,6 +163,16 @@ struct TranscriberTests {
             #expect(srt.lowercased().contains("fox"))
             #expect(srt.lowercased().contains("lazy dog"))
             #expect(!SubtitleConverter.parse(srt).0.isEmpty)
+
+            // A language whose model isn't on this Mac fails with instructions, never a download.
+            if #available(macOS 26, *), !(await SpeechTranscriber.installedLocales).contains(where: { $0.language.languageCode == .german }) {
+                options.language = "de-DE"
+                await #expect(throws: TranscriptionError.modelNotInstalled(Transcriber.languageName(Locale(identifier: "de-DE")))) {
+                    _ = try await Engine.convert(
+                        input: speech, request: ConversionRequest(source: .aiff, target: .txt, options: options), scratch: directory
+                    ) { _ in }
+                }
+            }
             return
         }
         print("SKIPPED transcription end-to-end test: \(reason)")

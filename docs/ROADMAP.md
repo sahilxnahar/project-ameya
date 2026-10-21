@@ -195,7 +195,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
 | Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
-| Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); captions ≤ 2 × 42 chars, ≤ 7 s |
+| Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only, with language models already on the Mac (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); never downloads; captions ≤ 2 × 42 chars, ≤ 7 s |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
