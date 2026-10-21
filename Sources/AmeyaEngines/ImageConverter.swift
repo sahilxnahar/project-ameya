@@ -17,9 +17,12 @@ public enum ConversionError: Error, Equatable, LocalizedError {
     case mediaFailed(String)
     case invalidData(String)
     case dataLimit(String)
+    /// A tool that exists in the request format but has no engine yet, e.g. "Making PDFs smaller".
+    case notAvailableYet(String)
 
     public var errorDescription: String? {
         switch self {
+        case .notAvailableYet(let feature): "\(feature) isn't available yet."
         case .unsupportedConversion(let from, let to): "Ameya can't convert \(from.displayName) to \(to.displayName) yet."
         case .noText: "This PDF has no selectable text. (It may be a scan; text recognition is coming.)"
         case .noAudioTrack: "This file has no sound to convert."
@@ -51,6 +54,10 @@ public enum ImageConverter {
 
         // Decide which frames survive in the target format.
         var frames = decoded.frames
+        let edits = request.options.image ?? ImageEdits()
+        if !edits.isIdentity {
+            notes += try ImageEditor.apply(edits, to: &frames)
+        }
         if frames.count > 1 {
             switch decoded.kind {
             case .animated where target.supportsAnimation:
@@ -87,6 +94,14 @@ public enum ImageConverter {
         let output: Data
         if target == .pdf {
             output = try PDFWriter.write(frames)
+        } else if let targetBytes = edits.targetBytes, !target.isIcon {
+            let animated = decoded.kind == .animated && target.supportsAnimation && frames.count > 1
+            let sizeNotes: [ConversionNote]
+            (output, sizeNotes) = try ImageEditor.encode(frames, within: targetBytes, lossy: target.isLossy) { attempt, quality in
+                try encode(attempt, as: target, animated: animated, loopCount: decoded.loopCount,
+                           quality: quality ?? request.options.quality) { _ in }
+            }
+            notes += sizeNotes.filter { !notes.contains($0) }
         } else {
             let animated = decoded.kind == .animated && target.supportsAnimation && frames.count > 1
             output = try encode(frames, as: target, animated: animated, loopCount: decoded.loopCount, quality: request.options.quality) { fraction in

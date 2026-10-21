@@ -8,9 +8,17 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var maxPixels: Int
     /// Upper bound on pages/frames read from one file.
     public var maxFrames: Int
+    /// Tools (see Operations.swift). With any of these set, the output may keep the source format.
+    public var image: ImageEdits?
+    public var video: VideoEdits?
+    public var pdf: PDFAction?
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
+
+    public var hasEdits: Bool {
+        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil
+    }
 
     public static let defaultMaxPixels = 100_000_000
     public static let defaultMaxFrames = 1_000
@@ -19,12 +27,18 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
         quality: Double? = nil,
         maxPixels: Int = ConversionOptions.defaultMaxPixels,
         maxFrames: Int = ConversionOptions.defaultMaxFrames,
+        image: ImageEdits? = nil,
+        video: VideoEdits? = nil,
+        pdf: PDFAction? = nil,
         debugDelaySeconds: Double? = nil,
         debugCrash: Bool? = nil
     ) {
         self.quality = quality
         self.maxPixels = maxPixels
         self.maxFrames = maxFrames
+        self.image = image
+        self.video = video
+        self.pdf = pdf
         self.debugDelaySeconds = debugDelaySeconds
         self.debugCrash = debugCrash
     }
@@ -37,11 +51,14 @@ public struct ConversionRequest: Codable, Sendable, Equatable {
     public var source: FileFormat?
     public var target: FileFormat
     public var options: ConversionOptions
+    /// Formats of every input when there is more than one (stdin is then a TAR stream, see TarStream).
+    public var inputs: [FileFormat]?
 
-    public init(source: FileFormat? = nil, target: FileFormat, options: ConversionOptions = ConversionOptions()) {
+    public init(source: FileFormat? = nil, target: FileFormat, options: ConversionOptions = ConversionOptions(), inputs: [FileFormat]? = nil) {
         self.source = source
         self.target = target
         self.options = options
+        self.inputs = inputs
     }
 }
 
@@ -75,6 +92,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case imagesDropped
     case nonImagesSkipped
     case pagesBecamePictures
+    // Tools
+    case locationRemoved
+    case metadataRemoved
+    case resized
+    case targetSizeNotReached
 
     public var message: String {
         switch self {
@@ -105,20 +127,28 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .imagesDropped: "Some pictures couldn't be found in the file and were left out."
         case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
         case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
+        case .locationRemoved: "Location information was removed."
+        case .metadataRemoved: "Camera details, location and other hidden information were removed."
+        case .resized: "The picture was made smaller."
+        case .targetSizeNotReached: "It couldn't be made quite that small; this is the smallest version Ameya could make."
         }
     }
 }
 
 /// What the worker reports back after a successful conversion.
 public struct ConversionResult: Codable, Sendable, Equatable {
+    /// Total bytes written to stdout (for several files, the size of the TAR stream).
     public var outputBytes: Int
     public var frames: Int
     public var notes: [ConversionNote]
+    /// Set when the job produced several files: their names, in order. stdout is then a TAR stream.
+    public var outputNames: [String]?
 
-    public init(outputBytes: Int, frames: Int, notes: [ConversionNote]) {
+    public init(outputBytes: Int, frames: Int, notes: [ConversionNote], outputNames: [String]? = nil) {
         self.outputBytes = outputBytes
         self.frames = frames
         self.notes = notes
+        self.outputNames = outputNames
     }
 }
 

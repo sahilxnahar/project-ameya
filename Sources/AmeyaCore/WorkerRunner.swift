@@ -64,17 +64,56 @@ public struct WorkerRunner: Sendable {
         self.timeout = timeout
     }
 
+    /// Converts one file. See `run(inputs:destination:request:progress:)`.
     public func run(
         input: URL,
         destination: URL,
         request: ConversionRequest,
         progress: @escaping @Sendable (Double) -> Void = { _ in }
     ) async throws -> ConversionResult {
+        try await run(inputs: [input], destination: destination, request: request, progress: progress)
+    }
+
+    /// Runs one job over one or more source files.
+    ///
+    /// - Several inputs are bundled, in order, into a temporary TAR stream (entries `0.ext`, `1.ext`, …)
+    ///   that becomes the worker's stdin; it is deleted afterwards. `request.inputs` names their formats
+    ///   (filled in by detection when `nil`).
+    /// - When the worker reports `outputNames`, its output is a TAR stream: it is unpacked with the
+    ///   strict reader into a hidden partial folder, checked against `outputNames`, and that folder is
+    ///   moved to `destination` (never over anything existing). Otherwise `destination` is a file.
+    public func run(
+        inputs: [URL],
+        destination: URL,
+        request: ConversionRequest,
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+        progress: @escaping @Sendable (Double) -> Void = { _ in }
+    ) async throws -> ConversionResult {
+        guard let first = inputs.first else { throw WorkerError.cannotOpenInput("(no files)") }
+        var request = request
+        var bundle: URL?
+        defer { if let bundle { try? FileManager.default.removeItem(at: bundle) } }
+
         let inputHandle: FileHandle
-        do {
-            inputHandle = try FileHandle(forReadingFrom: input)
-        } catch {
-            throw WorkerError.cannotOpenInput(input.lastPathComponent)
+        if inputs.count == 1 {
+            do {
+                inputHandle = try FileHandle(forReadingFrom: first)
+            } catch {
+                throw WorkerError.cannotOpenInput(first.lastPathComponent)
+            }
+        } else {
+            let formats = try request.inputs ?? inputs.map { url in
+                guard let format = FileFormat.detect(at: url) else { throw WorkerError.cannotOpenInput(url.lastPathComponent) }
+                return format
+            }
+            guard formats.count == inputs.count else {
+                throw WorkerError.failed("The request lists \(formats.count) formats for \(inputs.count) files.")
+            }
+            request.inputs = formats
+            let tar = temporaryDirectory.appendingPathComponent("ameya-inputs-\(UUID().uuidString).tar")
+            bundle = tar
+            try Self.bundle(inputs, formats: formats, into: tar)
+            inputHandle = try FileHandle(forReadingFrom: tar)
         }
         defer { try? inputHandle.close() }
 
@@ -84,10 +123,15 @@ public struct WorkerRunner: Sendable {
               let outputHandle = try? FileHandle(forWritingTo: partial) else {
             throw WorkerError.cannotCreateOutput(destination.lastPathComponent)
         }
+        // A sibling hidden folder for several outputs; also ends in ".partial" so cleanup finds it.
+        let partialFolder = destination.deletingLastPathComponent()
+            .appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).partial", isDirectory: true)
         var succeeded = false
         defer {
             try? outputHandle.close()
-            if !succeeded { try? FileManager.default.removeItem(at: partial) }
+            // After a single-file success it has been renamed away; after a multi-file one it was unpacked.
+            try? FileManager.default.removeItem(at: partial)
+            if !succeeded { try? FileManager.default.removeItem(at: partialFolder) }
         }
 
         let job = WorkerProcess(executable: executable, progress: progress)
@@ -103,13 +147,52 @@ public struct WorkerRunner: Sendable {
         guard written == result.outputBytes else {
             throw WorkerError.protocolViolation("reported \(result.outputBytes) bytes, wrote \(written)")
         }
-        // RENAME_EXCL: fail instead of replacing a file that appeared in the meantime.
-        guard renamex_np(partial.path, destination.path, UInt32(RENAME_EXCL)) == 0 else {
+        var moving = partial
+        if let names = result.outputNames {
+            try Self.unpack(partial, expecting: names, into: partialFolder)
+            moving = partialFolder
+        }
+        // RENAME_EXCL: fail instead of replacing a file or folder that appeared in the meantime.
+        guard renamex_np(moving.path, destination.path, UInt32(RENAME_EXCL)) == 0 else {
             if errno == EEXIST { throw WorkerError.outputExists(destination.lastPathComponent) }
             throw WorkerError.cannotCreateOutput(destination.lastPathComponent)
         }
         succeeded = true
         return result
+    }
+
+    private static func bundle(_ inputs: [URL], formats: [FileFormat], into tar: URL) throws {
+        guard FileManager.default.createFile(atPath: tar.path, contents: nil),
+              let handle = try? FileHandle(forWritingTo: tar) else {
+            throw WorkerError.cannotCreateOutput(tar.lastPathComponent)
+        }
+        defer { try? handle.close() }
+        let writer = TarStream.Writer(handle: handle)
+        for (index, input) in inputs.enumerated() {
+            do {
+                try writer.add(name: "\(index).\(formats[index].preferredExtension)", contentsOf: input)
+            } catch {
+                throw WorkerError.cannotOpenInput(input.lastPathComponent)
+            }
+        }
+        try writer.finish()
+    }
+
+    /// Strictly unpacks the worker's TAR output and checks it holds exactly `names`, in order.
+    private static func unpack(_ tar: URL, expecting names: [String], into folder: URL) throws {
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+            let handle = try FileHandle(forReadingFrom: tar)
+            defer { try? handle.close() }
+            let extracted = try TarStream.extract(from: handle, into: folder)
+            guard extracted == names else {
+                throw WorkerError.protocolViolation("the files sent don't match the files reported")
+            }
+        } catch let error as WorkerError {
+            throw error
+        } catch {
+            throw WorkerError.protocolViolation((error as? LocalizedError)?.errorDescription ?? "unreadable file bundle")
+        }
     }
 }
 
