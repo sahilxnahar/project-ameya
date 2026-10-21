@@ -26,6 +26,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         autoConverter.applySettings()
         ClipboardActions.removeOldFiles()
+        WheelController.shared.start() // The global drag wheel (Wheel/).
+        if let ring = WheelController.previewRing(from: CommandLine.arguments) { WheelController.shared.showPreview(ring) }
     }
 
     /// Dock drop and "Open With". The system grants the sandbox access to these files.

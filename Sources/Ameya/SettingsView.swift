@@ -44,6 +44,8 @@ struct SettingsView: View {
             }
             .onChange(of: autoConvert) { _, _ in AppDelegate.shared?.autoConverter.applySettings() }
 
+            WheelSettingsSection()
+
             Section("Startup") {
                 Toggle("Open Ameya when I log in", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }

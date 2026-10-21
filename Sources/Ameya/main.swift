@@ -49,6 +49,7 @@ struct MenuBarContent: View {
             Button("PNG") { ClipboardActions.copy(as: .png) }
             Button("PDF") { ClipboardActions.copy(as: .pdf) }
         }
+        WheelMenuItems()
         Divider()
         Button("Show Converted Files") {
             try? FileManager.default.createDirectory(at: store.outputDirectory, withIntermediateDirectories: true)
