@@ -33,7 +33,7 @@ extension SelfTest.Checker {
 
             let second = directory.appendingPathComponent("second part.wav")
             try AVToolSamples.tone(seconds: 1.5, amplitude: 0.3, to: second)
-            let joined = directory.appendingPathComponent("quiet talk (joined).m4a")
+            let joined = directory.appendingPathComponent("quiet talk (joined).wav")
             if await run([quiet, second], to: joined, request("media.joinAudio", .wav, .joinAudio, inputs: [.wav, .wav])) != nil {
                 let seconds = await AVToolSamples.duration(joined)
                 verify(abs(seconds - 5.5) < 0.1, "join audio", "\(seconds) s")
@@ -58,8 +58,10 @@ extension SelfTest.Checker {
                 verify(abs(seconds - 30) < 0.1, "ringtone 30 s", "\(seconds) s")
             }
 
+            let clipFolder = directory.appendingPathComponent("av samples", isDirectory: true)
+            try FileManager.default.createDirectory(at: clipFolder, withIntermediateDirectories: true)
             let clip = directory.appendingPathComponent("av clip.mov")
-            try await PresetSamples.clip(to: clip, in: directory)
+            try await PresetSamples.clip(to: clip, in: clipFolder)
             let gif = directory.appendingPathComponent("av clip (GIF).gif")
             if let result = await run([clip], to: gif, request("media.gif", .mov, .gif(targetBytes: 1_000_000))) {
                 let bytes = AVToolSamples.size(gif)

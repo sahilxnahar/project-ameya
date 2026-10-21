@@ -197,6 +197,18 @@ final class ChannelStage: PCMProcessor {
     }
 }
 
+/// Lets through at most `frames` samples per channel, then nothing.
+final class LengthLimit: PCMProcessor {
+    private var remaining: Int
+    init(frames: Int) { remaining = max(frames, 0) }
+    func process(_ chunk: AudioPipeline.Chunk) -> AudioPipeline.Chunk {
+        guard let count = chunk.first?.count else { return chunk }
+        let keep = min(count, remaining)
+        remaining -= keep
+        return keep == count ? chunk : chunk.map { Array($0.prefix(keep)) }
+    }
+}
+
 /// Measures what passes through without changing it.
 final class MeterStage: PCMProcessor {
     let meter: LoudnessMeter

@@ -123,7 +123,9 @@ enum AudioTools {
         } else {
             let layout = try await AudioPipeline.layout(of: composition, target: job.target)
             // The time-stretcher can run on past the scaled end; stop exactly there.
-            try await writeSound(composition, layout: layout, timeRange: CMTimeRange(start: .zero, duration: scaled), pitch: .spectral, chain: ProcessorChain([]),
+            let frames = Int((scaled.seconds * layout.sampleRate).rounded())
+            try await writeSound(composition, layout: layout, timeRange: CMTimeRange(start: .zero, duration: scaled), pitch: .spectral,
+                                 chain: ProcessorChain([LengthLimit(frames: frames)]),
                                  channels: layout.channels, source: input, isVideo: false, job: job)
         }
         return [.speedChanged]

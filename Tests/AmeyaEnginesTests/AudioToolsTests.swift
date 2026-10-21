@@ -109,10 +109,10 @@ struct AudioToolsTests {
 
     @Test("Speed changes the length, not the pitch", arguments: [0.5, 1.5, 2.0])
     func speedKeepsPitch(factor: Double) async throws {
-        let tone = try AVMedia.wav(seconds: 2, in: directory, left: AVMedia.sine(440, amplitude: 0.5))
+        let tone = try AVMedia.wav(seconds: 4, in: directory, left: AVMedia.sine(440, amplitude: 0.5))
         let (outputs, result) = try await runTool(.speed(factor), inputs: [tone], formats: [.wav], target: .wav, in: directory)
         let seconds = try await AVMedia.duration(of: outputs[0])
-        #expect(abs(seconds - 2 / factor) <= 2 / factor * 0.02, "\(seconds) s at \(factor)×")
+        #expect(abs(seconds - 4 / factor) <= 4 / factor * 0.02, "\(seconds) s at \(factor)×")
         #expect(abs(try AVMedia.frequency(of: outputs[0]) - 440) < 440 * 0.05)
         #expect(result.notes == [.speedChanged])
     }
