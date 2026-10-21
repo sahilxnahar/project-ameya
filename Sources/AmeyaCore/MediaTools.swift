@@ -47,7 +47,7 @@ public enum VisualiserStyle: String, Codable, Sendable, Equatable, CaseIterable 
 }
 
 /// An sRGB colour, 0…1 per component.
-public struct RGBColor: Codable, Sendable, Equatable {
+public struct VisualiserColor: Codable, Sendable, Equatable {
     public var red, green, blue: Double
     public init(red: Double, green: Double, blue: Double) {
         self.red = red
@@ -90,7 +90,7 @@ public enum MediaTool: Codable, Sendable, Equatable {
     /// Transcribes the speech (`ConversionOptions.language`), then draws the captions in.
     case autoCaption
     /// An MP4 of the sound with moving bars or a wave over a plain background.
-    case visualiser(style: VisualiserStyle, background: RGBColor)
+    case visualiser(style: VisualiserStyle, background: VisualiserColor)
 
     /// Whether the job produces a folder of files.
     public var producesSeveralFiles: Bool {

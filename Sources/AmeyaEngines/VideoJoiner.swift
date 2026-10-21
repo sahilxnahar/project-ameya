@@ -10,6 +10,8 @@ enum VideoJoiner {
     typealias Job = MediaToolbox.Job
 
     struct Part {
+        /// Kept alive: a track only refers weakly to its asset.
+        var asset: AVAsset
         var video: AVAssetTrack
         var audio: AVAssetTrack?
         var range: CMTimeRange
@@ -37,7 +39,7 @@ enum VideoJoiner {
             let (size, transform, rate, range, descriptions) = try await video.load(
                 .naturalSize, .preferredTransform, .nominalFrameRate, .timeRange, .formatDescriptions)
             let codec = descriptions.first.map(CMFormatDescriptionGetMediaSubType) ?? 0
-            parts.append(Part(video: video, audio: try await asset.loadTracks(withMediaType: .audio).first, range: range,
+            parts.append(Part(asset: asset, video: video, audio: try await asset.loadTracks(withMediaType: .audio).first, range: range,
                               naturalSize: size, transform: transform, codec: codec, frameRate: rate))
         }
 

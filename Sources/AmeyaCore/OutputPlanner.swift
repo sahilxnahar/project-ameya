@@ -9,14 +9,17 @@ public enum OutputPlanner {
     ///   - directory: where the output should be written.
     ///   - suffix: added after the name, e.g. "(rotated)" gives "photo (rotated).jpg".
     ///   - isTaken: whether a candidate URL is already used (on disk or reserved by a queued job).
+    ///   - fileExtension: used instead of the target's own, e.g. "m4b" for an audiobook written as M4A.
     public static func destination(
         for source: URL,
         target: FileFormat,
         in directory: URL,
         suffix: String? = nil,
+        fileExtension: String? = nil,
         isTaken: (URL) -> Bool
     ) -> URL {
-        let (stem, ext) = nameParts(for: source, target: target)
+        var (stem, ext) = nameParts(for: source, target: target)
+        if let fileExtension { ext = fileExtension }
         let base = suffixed(stem, suffix)
         func name(_ suffix: String) -> String { ext.isEmpty ? base + suffix : "\(base)\(suffix).\(ext)" }
         var candidate = directory.appendingPathComponent(name(""))

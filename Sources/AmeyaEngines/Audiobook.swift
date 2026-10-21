@@ -165,7 +165,7 @@ enum Audiobook {
     /// A 3GPP timed-text sample: a big-endian 16-bit length, then the UTF-8 text.
     static func textSample(_ text: String, range: CMTimeRange, format: CMFormatDescription) throws -> CMSampleBuffer {
         let utf8 = Array(text.utf8.prefix(1000))
-        var bytes: [UInt8] = [UInt8(utf8.count >> 8), UInt8(utf8.count & 0xFF)] + utf8
+        let bytes: [UInt8] = [UInt8(utf8.count >> 8), UInt8(utf8.count & 0xFF)] + utf8
         var block: CMBlockBuffer?
         var status = CMBlockBufferCreateWithMemoryBlock(allocator: kCFAllocatorDefault, memoryBlock: nil, blockLength: bytes.count,
                                                         blockAllocator: kCFAllocatorDefault, customBlockSource: nil,

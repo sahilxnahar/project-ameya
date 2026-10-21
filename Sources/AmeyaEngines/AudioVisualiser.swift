@@ -16,7 +16,7 @@ enum AudioVisualiser {
     static let bands = 32
     static let wavePoints = 96
 
-    static func make(_ input: URL, style: VisualiserStyle, background: RGBColor, job: Job) async throws -> [ConversionNote] {
+    static func make(_ input: URL, style: VisualiserStyle, background: VisualiserColor, job: Job) async throws -> [ConversionNote] {
         let asset = AVURLAsset(url: input)
         let levels = try await analyse(asset, style: style, progress: job.slice(from: 0, to: 0.25).progress)
         guard !levels.isEmpty else { throw ConversionError.refused("The sound is too short to show.") }
@@ -125,7 +125,7 @@ enum AudioVisualiser {
 
     // MARK: Drawing
 
-    static func drawVideo(_ levels: [[Float]], style: VisualiserStyle, background: RGBColor, to output: URL,
+    static func drawVideo(_ levels: [[Float]], style: VisualiserStyle, background: VisualiserColor, to output: URL,
                           progress: @escaping @Sendable (Double) -> Void) async throws {
         let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
@@ -168,7 +168,7 @@ enum AudioVisualiser {
         let background: CGColor
         let foreground: CGColor
 
-        init(style: VisualiserStyle, background: RGBColor) {
+        init(style: VisualiserStyle, background: VisualiserColor) {
             self.style = style
             self.background = CGColor(srgbRed: background.red, green: background.green, blue: background.blue, alpha: 1)
             // Light marks on dark colours, dark marks on light ones.

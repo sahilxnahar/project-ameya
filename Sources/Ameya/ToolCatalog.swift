@@ -41,6 +41,11 @@ struct Tool: Identifiable {
     /// in "photo (India passport).jpg").
     var suffixForOptions: ((ConversionOptions) -> String)?
     var folderForOptions: ((ConversionOptions) -> Bool)?
+    /// The output's extension when it isn't the target's own ("m4b" audiobooks, "m4r" ringtones).
+    var outputExtension: String?
+    /// Last touches that need the files themselves, in order (e.g. audiobook chapters named after
+    /// them). Called after the panel's options have been applied.
+    var finishRequest: ((inout ConversionRequest, [URL]) -> Void)?
 
     func outputSuffix(for options: ConversionOptions) -> String { suffixForOptions?(options) ?? outputSuffix }
     func producesFolder(for options: ConversionOptions) -> Bool { folderForOptions?(options) ?? producesFolder }
@@ -72,6 +77,7 @@ struct ToolCatalog {
     init(writable: Set<FileFormat>) {
         tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
             + Self.sizePresetTools(writable: writable) + Self.pdfToolbox() // SizePresets.swift, PDFToolbox
+            + Self.avTools() // AVToolCatalog.swift
     }
 
     /// Tools offered for these files, in catalog order.

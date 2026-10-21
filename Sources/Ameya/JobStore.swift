@@ -199,12 +199,13 @@ final class JobStore: ObservableObject {
             var request = tool.makeRequest(first.format)
             if let options { request.options = options }
             if files.count > 1 { request.inputs = files.map(\.format) }
+            tool.finishRequest?(&request, files.map(\.url))
             let suffix = tool.outputSuffix(for: request.options)
             let isFolder = tool.producesFolder(for: request.options)
             let destination = isFolder
                 ? OutputPlanner.folderDestination(for: first.url, suffix: suffix, in: outputDirectory, isTaken: isTaken)
                 : OutputPlanner.destination(for: first.url, target: request.target, in: outputDirectory,
-                                            suffix: suffix, isTaken: isTaken)
+                                            suffix: suffix, fileExtension: tool.outputExtension, isTaken: isTaken)
             enqueue(Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
                         isFolder: isFolder, request: request, toolTitle: tool.title))
         }
@@ -252,7 +253,8 @@ final class JobStore: ObservableObject {
         running += 1
         job.state = .running
         job.task = Task { [weak self] in
-            if job.sources.count == 1, ConversionMatrix.isTranscription(from: job.sourceFormats[0], to: job.target),
+            if job.sources.count == 1, ConversionMatrix.isTranscription(from: job.sourceFormats[0], to: job.target)
+                || job.request.options.media == .autoCaption,
                let problem = await SpeechSetup.prepare(language: job.request.options.language) {
                 job.state = .failed(problem)
                 self?.finish(job)
