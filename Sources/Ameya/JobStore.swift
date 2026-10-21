@@ -170,12 +170,14 @@ final class JobStore: ObservableObject {
             var request = tool.makeRequest(first.format)
             if let options { request.options = options }
             if files.count > 1 { request.inputs = files.map(\.format) }
-            let destination = tool.producesFolder
-                ? OutputPlanner.folderDestination(for: first.url, suffix: tool.outputSuffix, in: outputDirectory, isTaken: isTaken)
+            let suffix = tool.outputSuffix(for: request.options)
+            let isFolder = tool.producesFolder(for: request.options)
+            let destination = isFolder
+                ? OutputPlanner.folderDestination(for: first.url, suffix: suffix, in: outputDirectory, isTaken: isTaken)
                 : OutputPlanner.destination(for: first.url, target: request.target, in: outputDirectory,
-                                            suffix: tool.outputSuffix, isTaken: isTaken)
+                                            suffix: suffix, isTaken: isTaken)
             enqueue(Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
-                        isFolder: tool.producesFolder, request: request, toolTitle: tool.title))
+                        isFolder: isFolder, request: request, toolTitle: tool.title))
         }
         pending = []
         startQueuedJobs()

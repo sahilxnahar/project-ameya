@@ -37,6 +37,13 @@ struct Tool: Identifiable {
     /// The result is a folder of files ("report (pages)") rather than one file.
     let producesFolder: Bool
     var panel: Panel?
+    /// When set, the panel's options decide the suffix and folder-ness instead (e.g. the country
+    /// in "photo (India passport).jpg").
+    var suffixForOptions: ((ConversionOptions) -> String)?
+    var folderForOptions: ((ConversionOptions) -> Bool)?
+
+    func outputSuffix(for options: ConversionOptions) -> String { suffixForOptions?(options) ?? outputSuffix }
+    func producesFolder(for options: ConversionOptions) -> Bool { folderForOptions?(options) ?? producesFolder }
 
     init(
         id: String, title: String, systemImage: String, help: String, mode: Mode = .eachFile,
@@ -63,7 +70,7 @@ struct ToolCatalog {
     let tools: [Tool]
 
     init(writable: Set<FileFormat>) {
-        tools = Self.imageTools(writable: writable) + Self.pdfTools()
+        tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
     }
 
     /// Tools offered for these files, in catalog order.
@@ -115,6 +122,34 @@ struct ToolCatalog {
                  isAvailable: { editable($0) && writable.contains(.jpeg) },
                  makeRequest: edit(ImageEdits(targetBytes: 200_000), to: { _ in .jpeg })),
         ]
+    }
+
+    // MARK: Passport photos
+
+    static func passportTools(writable: Set<FileFormat>) -> [Tool] {
+        // A single photo (not icons, not PDFs) on a Mac that can write JPEG.
+        let onePhoto: ([FileFormat]) -> Bool = { formats in
+            formats.count == 1 && formats[0].family == .image && !formats[0].isIcon && formats[0] != .pdf
+                && writable.contains(.jpeg)
+        }
+        var tool = Tool(
+            id: "image.passportPhoto", title: "Passport photo…", systemImage: "person.crop.square",
+            help: "Makes a passport or visa photo for the country you choose, with a plain background.",
+            outputSuffix: "(passport photo)", isAvailable: onePhoto,
+            makeRequest: { format in
+                var options = ConversionOptions()
+                options.passport = PassportPhotoOptions(spec: PassportPhotoPanel.defaultSpec)
+                return ConversionRequest(source: format, target: .jpeg, options: options)
+            },
+            panel: { _, done in AnyView(PassportPhotoPanel(done: done)) }
+        )
+        tool.suffixForOptions = { options in
+            guard let passport = options.passport else { return "(passport photo)" }
+            let name = passport.spec.id == PassportSpec.customID ? "passport photo" : passport.spec.name
+            return passport.printSheet ? "(\(name) print)" : "(\(name))"
+        }
+        tool.folderForOptions = { $0.passport?.printSheet ?? false }
+        return [tool]
     }
 
     // MARK: PDFs

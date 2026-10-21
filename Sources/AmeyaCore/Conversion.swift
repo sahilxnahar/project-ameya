@@ -26,9 +26,11 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     public var subtitleFrameRate: Double?
     /// Re-encodes a text file in place (same format in and out), e.g. to fix its encoding.
     public var text: TextEdits?
+    /// Makes a passport or visa photo (see PassportPhotoSpec.swift). Set after `init`.
+    public var passport: PassportPhotoOptions?
 
     public var hasEdits: Bool {
-        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil
+        (image.map { !$0.isIdentity } ?? false) || video != nil || pdf != nil || passport != nil
     }
 
     public static let defaultMaxPixels = 100_000_000
@@ -150,6 +152,15 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case metadataRemoved
     case resized
     case targetSizeNotReached
+    // Passport photos
+    case passportBackgroundReplaced
+    case passportBackgroundKept
+    case passportEdgesFilled
+    case passportLowResolution
+    case passportHeadStraightened
+    case passportFaceTurned
+    case passportEyesMayBeClosed
+    case passportCheckRules
 
     public var message: String {
         switch self {
@@ -198,6 +209,14 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .metadataRemoved: "Camera details, location and other hidden information were removed."
         case .resized: "The picture was made smaller."
         case .targetSizeNotReached: "It couldn't be made quite that small; this is the smallest version Ameya could make."
+        case .passportBackgroundReplaced: "The background was replaced with a plain one. Check the edges around your hair."
+        case .passportBackgroundKept: "No outline of a person was found, so the original background was kept."
+        case .passportEdgesFilled: "The photo didn't reach every edge, so plain background was added. A photo with more space around you works better."
+        case .passportLowResolution: "Your face is small in this photo, so it was enlarged and may look soft. A closer or sharper photo works better."
+        case .passportHeadStraightened: "Your head was tilted, so the photo was turned to level your eyes."
+        case .passportFaceTurned: "Your face seems turned away. Most countries need you to look straight at the camera."
+        case .passportEyesMayBeClosed: "Your eyes may be closed. Most countries need your eyes open."
+        case .passportCheckRules: "Rules differ between offices and change over time: check the official requirements before you submit."
         }
     }
 }
