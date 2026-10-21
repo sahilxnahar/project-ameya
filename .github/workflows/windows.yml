@@ -1,0 +1,129 @@
+name: Windows
+
+on:
+  push:
+    paths:
+      - 'windows/**'
+      - 'spec/**'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'spec/**'
+      - '.github/workflows/windows.yml'
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: '1'
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+
+jobs:
+  build-test-package:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+
+      - name: Toolchain
+        run: |
+          dotnet --info
+          [System.Environment]::OSVersion.VersionString
+
+      # Core, engines and the real sandboxed worker: parity with the shared spec, TAR stream,
+      # output naming, worker isolation (timeout, cancel, crash, Low integrity), WIC conversions,
+      # and the local-only guard. Debug build, so the worker's test hooks are compiled in.
+      - name: Test
+        run: dotnet test windows/tests/Ameya.Tests/Ameya.Tests.csproj -c Debug --logger "console;verbosity=normal"
+
+      - name: Build app (x64)
+        run: dotnet build windows/src/Ameya.App/Ameya.App.csproj -c Release -p:Platform=x64
+
+      - name: Build app (ARM64)
+        run: dotnet build windows/src/Ameya.App/Ameya.App.csproj -c Release -p:Platform=ARM64
+
+      # The app's own --self-test, run from the build folder (it starts before any XAML, so it needs
+      # no package identity): generated pictures go through the real Low integrity worker.
+      - name: Self-test (x64 build)
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem windows/src/Ameya.App/bin/x64/Release -Recurse -Filter Ameya.App.exe | Select-Object -First 1
+          if (-not $exe) { throw "Ameya.App.exe was not built" }
+          $out = Join-Path $env:RUNNER_TEMP selftest.txt
+          $process = Start-Process -FilePath $exe.FullName -ArgumentList '--self-test' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+          Get-Content $out
+          if ($process.ExitCode -ne 0) { throw "self-test failed with exit code $($process.ExitCode)" }
+          if (-not (Select-String -Path $out -Pattern 'SELFTEST OK' -Quiet)) { throw "SELFTEST OK missing" }
+
+      - name: Package MSIX (x64 and ARM64, self-contained)
+        shell: pwsh
+        run: |
+          foreach ($platform in 'x64', 'ARM64') {
+            msbuild windows/src/Ameya.App/Ameya.App.csproj /restore /m /v:minimal `
+              /p:Configuration=Release /p:Platform=$platform /p:AmeyaSelfContained=true `
+              /p:GenerateAppxPackageOnBuild=true /p:UapAppxPackageBuildMode=SideloadOnly
+            if ($LASTEXITCODE -ne 0) { throw "packaging $platform failed" }
+          }
+          Get-ChildItem windows/artifacts/packages -Recurse | Select-Object FullName, Length | Format-Table -AutoSize
+
+      # A throwaway certificate made for this run only. Its private key never leaves the runner;
+      # only the public .cer is uploaded, so testers can trust the sideloaded package.
+      - name: Sign with a throwaway test certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=Project Ameya Test' -KeyUsage DigitalSignature `
+            -FriendlyName 'Ameya CI test signing' -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') -NotAfter (Get-Date).AddDays(30)
+          $password = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(24))
+          $pfx = Join-Path $env:RUNNER_TEMP 'ameya-test.pfx'
+          Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString $password -AsPlainText -Force) | Out-Null
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Export-Certificate -Cert $cert -FilePath dist/Ameya-test-certificate.cer | Out-Null
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          $packages = Get-ChildItem windows/artifacts/packages -Recurse -Filter 'Ameya.App_*.msix'
+          if (-not $packages) { throw "no MSIX was produced" }
+          foreach ($package in $packages) {
+            & $signtool.FullName sign /fd SHA256 /f $pfx /p $password $package.FullName
+            if ($LASTEXITCODE -ne 0) { throw "signing $($package.Name) failed" }
+            Copy-Item $package.FullName dist/
+          }
+          Remove-Item $pfx
+          Import-Certificate -FilePath dist/Ameya-test-certificate.cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+
+      # Installs the signed x64 package with its Windows App SDK runtime and runs the packaged
+      # app's self-test through its execution alias, proving the MSIX installs and works.
+      - name: Install the package and run its self-test
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem dist -Filter 'Ameya.App_*_x64*.msix' | Select-Object -First 1
+          $dependencies = Get-ChildItem windows/artifacts/packages -Recurse -Include '*.msix', '*.appx' |
+            Where-Object { $_.FullName -match '\\Dependencies\\x64\\' } | ForEach-Object FullName
+          Write-Host "Dependencies: $dependencies"
+          if ($dependencies) { Add-AppxPackage -Path $package.FullName -DependencyPath $dependencies }
+          else { Add-AppxPackage -Path $package.FullName }
+          Get-AppxPackage -Name 'ProjectAmeya.Ameya' | Format-List Name, Version, InstallLocation
+          $alias = Join-Path $env:LOCALAPPDATA 'Microsoft\WindowsApps\Ameya.exe'
+          $out = Join-Path $env:RUNNER_TEMP packaged-selftest.txt
+          $process = Start-Process -FilePath $alias -ArgumentList '--self-test' -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+          Get-Content $out
+          if ($process.ExitCode -ne 0) { throw "packaged self-test failed with exit code $($process.ExitCode)" }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Ameya-Windows-${{ github.sha }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

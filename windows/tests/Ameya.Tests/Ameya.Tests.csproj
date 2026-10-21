@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(AmeyaWindowsTfm)</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Ameya.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- MIT (xunit), Apache-2.0/MIT (test SDK and runner). Test-only; not shipped. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ameya.Core\Ameya.Core.csproj" />
+    <ProjectReference Include="..\..\src\Ameya.Engines\Ameya.Engines.csproj" />
+    <!-- The real worker exe is copied next to the tests, which run it as a sandboxed process. -->
+    <ProjectReference Include="..\..\src\Ameya.Worker\Ameya.Worker.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(AmeyaSpecDir)detection-vectors.json" Link="spec\detection-vectors.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(AmeyaSpecDir)formats.json" Link="spec\formats.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(AmeyaSpecDir)tar-sample.tar" Link="spec\tar-sample.tar" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>WindowsRoot</_Parameter1>
+      <_Parameter2>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>
