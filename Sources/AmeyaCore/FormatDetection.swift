@@ -50,7 +50,9 @@ extension FileFormat {
             return byExtension
         }
         // Text formats with no reliable signature: accept the extension if the bytes look like text.
-        if let byExtension, [.txt, .srt, .vtt, .html, .md].contains(byExtension), looksLikeText(bytes) {
+        // YAML and XLSX are left out: Ameya can only write them, so they aren't offered as sources.
+        if let byExtension, [.txt, .srt, .vtt, .html, .md, .csv, .tsv, .json, .xml, .plist].contains(byExtension),
+           looksLikeText(bytes) {
             return byExtension
         }
         return nil
@@ -105,6 +107,15 @@ extension FileFormat {
         let lowered = String(decoding: bytes.prefix(32), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.hasPrefix("<!doctype html") || lowered.hasPrefix("<html") { return .html }
+
+        // Data
+        if starts("bplist00") { return .plist }
+        if lowered.hasPrefix("<?xml") || lowered.hasPrefix("<plist") {
+            let whole = String(decoding: bytes, as: UTF8.self).lowercased()
+            if whole.contains("<!doctype plist") || whole.contains("<plist") { return .plist }
+            if whole.contains("<!doctype html") || whole.contains("<html") { return .html } // XHTML
+            return .xml
+        }
 
         // Audio
         if starts("ID3") { return .mp3 }

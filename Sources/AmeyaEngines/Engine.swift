@@ -59,6 +59,10 @@ public enum Engine {
             notes = subtitleNotes
             progress(1)
 
+        case (.data, .data), (.data, .document):
+            notes = try DataConverter.convert(input: input, from: source, to: target, output: output)
+            progress(1)
+
         default:
             throw ConversionError.unsupportedConversion(from: source, to: target)
         }

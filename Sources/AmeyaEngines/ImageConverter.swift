@@ -15,6 +15,8 @@ public enum ConversionError: Error, Equatable, LocalizedError {
     case noVideoTrack
     case noSubtitles
     case mediaFailed(String)
+    case invalidData(String)
+    case dataLimit(String)
 
     public var errorDescription: String? {
         switch self {
@@ -24,6 +26,8 @@ public enum ConversionError: Error, Equatable, LocalizedError {
         case .noVideoTrack: "This file has no video."
         case .noSubtitles: "No subtitles were found in this file."
         case .mediaFailed(let reason): "The conversion failed: \(reason)"
+        case .invalidData(let reason): "This file couldn't be read: \(reason)."
+        case .dataLimit(let reason): "This file is too big to convert: \(reason)."
         case .unreadable: "This file couldn't be read. It may be damaged or not an image."
         case .unsupportedTarget(let format): "This Mac can't create \(format.displayName) files."
         case .tooLarge(let pixels, let limit): "The image is too large (\(pixels / 1_000_000) MP, limit \(limit / 1_000_000) MP)."
