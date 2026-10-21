@@ -59,7 +59,7 @@ internal static class GifAnimation
         {
             await encoder.BitmapContainerProperties.SetPropertiesAsync(new BitmapPropertySet
             {
-                ["/appext/Application"] = new BitmapTypedValue("NETSCAPE2.0"u8.ToArray(), Windows.Foundation.PropertyType.UInt8Array),
+                ["/appext/Application"] = new BitmapTypedValue(System.Text.Encoding.ASCII.GetBytes("NETSCAPE2.0"), Windows.Foundation.PropertyType.UInt8Array),
                 ["/appext/Data"] = new BitmapTypedValue(
                     new byte[] { 3, 1, (byte)(loopCount & 0xFF), (byte)((loopCount >> 8) & 0xFF), 0 }, Windows.Foundation.PropertyType.UInt8Array),
             });

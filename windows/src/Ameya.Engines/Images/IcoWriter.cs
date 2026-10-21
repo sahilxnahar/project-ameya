@@ -22,6 +22,13 @@ internal static class IcoWriter
         var images = new List<byte[]>();
         foreach (var square in squares) images.Add(await WicEncoder.EncodePngAsync(square));
 
+        await output.WriteAsync(Header(squares, images));
+        foreach (var image in images) await output.WriteAsync(image);
+    }
+
+    /// <summary>The ICONDIR and its entries. Separate from WriteAsync because spans can't live in async methods.</summary>
+    private static byte[] Header(IReadOnlyList<ImageFrame> squares, IReadOnlyList<byte[]> images)
+    {
         var header = new byte[6 + 16 * squares.Count];
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2), 1); // type: icon
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), (ushort)squares.Count);
@@ -37,7 +44,6 @@ internal static class IcoWriter
             BinaryPrimitives.WriteInt32LittleEndian(entry[12..], offset);
             offset += images[i].Length;
         }
-        await output.WriteAsync(header);
-        foreach (var image in images) await output.WriteAsync(image);
+        return header;
     }
 }
