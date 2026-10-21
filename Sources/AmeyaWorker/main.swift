@@ -19,6 +19,9 @@ func fail(_ message: String, scratch: URL? = nil) -> Never {
     exit(2)
 }
 
+// Lead a process group of our own so the app can stop helpers we start (FFmpeg) along with us.
+setpgid(0, 0)
+
 let arguments = CommandLine.arguments
 guard let flag = arguments.firstIndex(of: WorkerProtocol.requestArgument),
       flag + 1 < arguments.count,

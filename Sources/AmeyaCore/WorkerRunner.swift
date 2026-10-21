@@ -184,6 +184,8 @@ final class WorkerProcess: @unchecked Sendable {
             if stopReason == nil { stopReason = reason }
         }
         if process.isRunning {
+            // The worker leads its own process group; this also stops any helper it started.
+            Darwin.kill(-process.processIdentifier, SIGKILL)
             Darwin.kill(process.processIdentifier, SIGKILL)
         }
     }

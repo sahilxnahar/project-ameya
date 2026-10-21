@@ -46,6 +46,17 @@ enum SelfTest {
                let mp4 = await check.convert(gif, from: .gif, to: .mp4) {
                 await check.convert(mp4, from: .mp4, to: .mov)
                 await check.convert(mp4, from: .mp4, to: .gif)
+                // The LGPL FFmpeg helper, a separate process inside the worker's sandbox.
+                if FFmpegAvailability.isAvailable, let webm = await check.convert(mp4, from: .mp4, to: .webm) {
+                    await check.convert(webm, from: .webm, to: .mp4)
+                }
+            }
+            if FFmpegAvailability.isAvailable {
+                for target in [FileFormat.mp3, .ogg, .opus] {
+                    await check.convert(wav, from: .wav, to: target)
+                }
+            } else {
+                print("SKIP FFmpeg formats: ameya-ffmpeg is not bundled")
             }
 
             let srt = directory.appendingPathComponent("captions.srt")

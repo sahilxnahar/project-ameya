@@ -23,6 +23,12 @@ public enum Engine {
         var frames = 1
 
         switch (source.family, target.family) {
+        case _ where source.isFFmpegOnly || target.isFFmpegTarget:
+            // Ogg, Opus, MP3 output, MKV, WebM, AVI…: the bundled LGPL FFmpeg helper.
+            guard let helper = FFmpegAvailability.helperURL else { throw ConversionError.unsupportedConversion(from: source, to: target) }
+            try await FFmpegConverter.convert(input: input, to: target, output: output, helper: helper, progress: progress)
+            notes = ConversionMatrix(writable: [target]).possibleLosses(from: source, to: target)
+
         case (.image, .image), (.image, .document), (.document, .image):
             let (data, result) = try ImageConverter.convert(try read(input), request: request, progress: progress)
             try data.write(to: output)

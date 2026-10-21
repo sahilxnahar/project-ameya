@@ -12,8 +12,14 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case pdf, txt, rtf, html, docx, doc, odt, md
     // Audio. `alac` is Apple Lossless in an .m4a file; it is only ever a target.
     case mp3, m4a, alac, wav, aiff, caf, flac
+    // Audio read and written by the bundled FFmpeg helper
+    case ogg, opus
     // Video
     case mp4, mov, m4v
+    // Video read and written by the bundled FFmpeg helper
+    case mkv, webm, avi
+    // Video that can only be read (3GP through AVFoundation, the rest through FFmpeg)
+    case flv, wmv, ts, mpg, threegp = "3gp"
     // Subtitles
     case srt, vtt
     // Archives. RAR can only be read.
@@ -43,8 +49,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
              .heics, .jp2, .psd, .exr, .tga, .pbm, .ktx, .ktx2, .astc, .ico, .icns,
              .raw, .jxl, .dicom, .hdr, .sgi: .image
         case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md: .document
-        case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
-        case .mp4, .mov, .m4v: .video
+        case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac, .ogg, .opus: .audio
+        case .mp4, .mov, .m4v, .mkv, .webm, .avi, .flv, .wmv, .ts, .mpg, .threegp: .video
         case .srt, .vtt: .subtitle
         case .zip, .tar, .tgz, .tbz2, .txz, .sevenZip, .rar: .archive
         }
@@ -94,6 +100,16 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .mp4: "MP4"
         case .mov: "MOV"
         case .m4v: "M4V"
+        case .ogg: "Ogg Vorbis"
+        case .opus: "Opus"
+        case .mkv: "MKV"
+        case .webm: "WebM"
+        case .avi: "AVI"
+        case .flv: "Flash Video (FLV)"
+        case .wmv: "Windows Media (WMV)"
+        case .ts: "MPEG-TS"
+        case .mpg: "MPEG"
+        case .threegp: "3GP"
         case .srt: "SRT"
         case .vtt: "WebVTT"
         case .zip: "ZIP"
@@ -150,6 +166,16 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .mp4: "public.mpeg-4"
         case .mov: "com.apple.quicktime-movie"
         case .m4v: "com.apple.m4v-video"
+        case .ogg: "org.xiph.ogg-audio"
+        case .opus: "org.xiph.opus"
+        case .mkv: "org.matroska.mkv"
+        case .webm: "org.webmproject.webm"
+        case .avi: "public.avi"
+        case .flv: "com.adobe.flash.video"
+        case .wmv: "com.microsoft.windows-media-wmv"
+        case .ts: "public.mpeg-2-transport-stream"
+        case .mpg: "public.mpeg"
+        case .threegp: "public.3gpp"
         case .srt: "public.srt"
         case .vtt: "org.w3.webvtt"
         case .zip: "public.zip-archive"
@@ -186,6 +212,11 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .wav: ["wav", "wave"]
         case .aiff: ["aiff", "aif", "aifc"]
         case .mov: ["mov", "qt"]
+        case .ogg: ["ogg", "oga"]
+        case .wmv: ["wmv", "asf"]
+        case .ts: ["ts", "m2ts", "mts"]
+        case .mpg: ["mpg", "mpeg", "m2p", "vob"]
+        case .threegp: ["3gp", "3g2"]
         case .tgz: ["tgz", "gz"]
         case .tbz2: ["tbz2", "tbz", "bz2"]
         case .txz: ["txz", "xz"]
@@ -229,7 +260,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
 
     public var isLossy: Bool {
         switch self {
-        case .jpeg, .heic, .heics, .avif, .webp, .jp2, .astc, .mp3, .m4a: true
+        case .jpeg, .heic, .heics, .avif, .webp, .jp2, .astc, .mp3, .m4a, .ogg, .opus: true
         default: false
         }
     }
@@ -245,14 +276,40 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         }
     }
 
+    /// Formats only the bundled FFmpeg helper can read or write. AVFoundation handles the rest.
+    /// MP3 is read by AVFoundation but written by FFmpeg (LAME), so it is only an FFmpeg *target*.
+    public var isFFmpegOnly: Bool {
+        switch self {
+        case .ogg, .opus, .mkv, .webm, .avi, .flv, .wmv, .ts, .mpg: true
+        default: false
+        }
+    }
+
+    /// Targets written by the FFmpeg helper.
+    public var isFFmpegTarget: Bool {
+        switch self {
+        case .mp3, .ogg, .opus, .mkv, .webm, .avi: true
+        default: false
+        }
+    }
+
+    /// Media formats Ameya reads but never writes.
+    public var isReadOnlyMedia: Bool {
+        switch self {
+        case .flv, .wmv, .ts, .mpg, .threegp: true
+        default: false
+        }
+    }
+
     /// Formats this Mac can write. Image formats are whatever ImageIO can encode;
     /// the rest are provided by Ameya's own engines.
     public static func systemWritable() -> Set<FileFormat> {
         let encodable = Set(CGImageDestinationCopyTypeIdentifiers() as? [String] ?? [])
         return Set(allCases.filter { format in
             switch format {
-            case .mp3: false // needs the LGPL MP3 encoder (planned)
             case .rar: false // proprietary; extraction only
+            case _ where format.isReadOnlyMedia: false
+            case _ where format.isFFmpegTarget: FFmpegAvailability.isAvailable
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true
             }
