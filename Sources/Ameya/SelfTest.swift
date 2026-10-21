@@ -3,6 +3,7 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import ImageIO
+import Speech
 
 /// Exercises the real bundle: sandbox, worker launch, every engine and safe output.
 /// Run as `Ameya.app/Contents/MacOS/Ameya --self-test`.
@@ -52,6 +53,19 @@ enum SelfTest {
             try Data("1\n00:00:01,000 --> 00:00:02,500\nHello\n".utf8).write(to: srt)
             await check.convert(srt, from: .srt, to: .vtt)
 
+            if let reason = await speechUnavailableReason() {
+                print("SKIP aiff -> srt: \(reason)")
+            } else if let speech = synthesiseSpeech(in: directory) {
+                if let captions = await check.convert(speech, from: .aiff, to: .srt) {
+                    let text = (try? String(contentsOf: captions, encoding: .utf8)) ?? ""
+                    let heard = text.lowercased().contains("fox")
+                    print("\(heard ? "PASS" : "FAIL") transcript mentions the fox")
+                    check.allPassed = check.allPassed && heard
+                }
+            } else {
+                print("SKIP aiff -> srt: couldn't synthesise speech")
+            }
+
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
             let passed = check.allPassed && unchanged
@@ -93,6 +107,26 @@ enum SelfTest {
                 return nil
             }
         }
+    }
+
+    /// Checks without prompting: the self-test must never show a permission dialog.
+    private static func speechUnavailableReason() async -> String? {
+        if #available(macOS 26, *), SpeechTranscriber.isAvailable {
+            let installed = await SpeechTranscriber.installedLocales.map { $0.identifier(.bcp47) }
+            return installed.contains("en-US") ? nil : "the en-US speech model isn't installed"
+        }
+        return SFSpeechRecognizer.authorizationStatus() == .authorized ? nil : "speech recognition isn't authorised"
+    }
+
+    /// English speech from the system voice, or `nil` if `say` can't run here.
+    private static func synthesiseSpeech(in directory: URL) -> URL? {
+        let output = directory.appendingPathComponent("speech.aiff")
+        let say = Process()
+        say.executableURL = URL(fileURLWithPath: "/usr/bin/say")
+        say.arguments = ["-v", "Samantha", "-o", output.path, "The quick brown fox jumps over the lazy dog."]
+        do { try say.run() } catch { return nil }
+        say.waitUntilExit()
+        return say.terminationStatus == 0 ? output : nil
     }
 
     /// A 64×48 PNG whose left half is transparent.

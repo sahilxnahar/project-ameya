@@ -23,6 +23,11 @@ public enum Engine {
         var frames = 1
 
         switch (source.family, target.family) {
+        case _ where ConversionMatrix.isTranscription(from: source, to: target):
+            notes = try await Transcriber.convert(
+                input: input, to: target, output: output, scratch: scratch, options: request.options, progress: progress
+            )
+
         case (.image, .image), (.image, .document), (.document, .image):
             let (data, result) = try ImageConverter.convert(try read(input), request: request, progress: progress)
             try data.write(to: output)

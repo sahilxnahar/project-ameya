@@ -28,6 +28,8 @@
 	<string>Project Ameya contributors. MPL-2.0.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ameya transcribes audio and video into text and captions. Recognition runs on this Mac; your audio is never uploaded.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 </dict>

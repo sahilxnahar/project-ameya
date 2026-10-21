@@ -97,7 +97,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Trim, split, crop, change speed, join | P0 | ⬜ |
 | Compress with size presets (email, WhatsApp, Discord 10 MB) | P0 | ⬜ |
 | Extract audio, save frames, thumbnail grid, video → GIF with size target | P0 | ⬜ |
-| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | ⬜ |
+| Auto-subtitles (on-device speech recognition) → SRT/VTT, burn in | P0 | 🚧 SRT/VTT done; burn-in to do |
 | Redact video (blur regions, auto-blur faces) | P1 | ⬜ |
 | Auto-cut silences | P1 | ⬜ |
 | Landscape → vertical 9:16 following the subject | P1 | ⬜ |
@@ -109,7 +109,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 |---|---|---|
 | Trim, merge, fade, normalise loudness (incl. −16 LUFS podcast preset) | P0 | ⬜ |
 | Channels (mono/stereo/swap), speed and pitch | P0 | ⬜ |
-| Transcribe to text | P0 | ⬜ |
+| Transcribe to text | P0 | ✅ |
 | Bleep words, voice isolation / noise removal | P1 | ⬜ |
 | Ringtone maker (.m4r), trim silence, audio visualiser video | P1 | ⬜ |
 | BPM and key detection | P2 | ⬜ |
@@ -195,6 +195,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
 | Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
+| Transcription | Any audio or video → TXT, SRT, WebVTT | On-device only (SpeechAnalyzer on macOS 26+, SFSpeechRecognizer before); captions ≤ 2 × 42 chars, ≤ 7 s |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
