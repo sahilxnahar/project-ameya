@@ -50,14 +50,17 @@ final class JobStore: ObservableObject {
     @Published private(set) var jobs: [Job] = []
 
     let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
-    let outputDirectory: URL
+    /// Where conversions are saved: Settings' choice (OutputLocation.swift), or a one-off override.
+    var outputDirectory: URL { directoryOverride ?? OutputLocation.directory(default: defaultOutputDirectory) }
+    let defaultOutputDirectory: URL
+    private var directoryOverride: URL?
     private let worker: URL?
     private let maxConcurrent = max(1, min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
     private var running = 0
     private var reserved: Set<URL> = []
 
     init() {
-        outputDirectory = Self.realDownloadsDirectory().appendingPathComponent("Ameya", isDirectory: true)
+        defaultOutputDirectory = Self.realDownloadsDirectory().appendingPathComponent("Ameya", isDirectory: true)
         worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker")
         Self.removeStaleScratchFolders()
     }
@@ -105,6 +108,23 @@ final class JobStore: ObservableObject {
         }
         pending = []
         startQueuedJobs()
+    }
+
+    /// Queues `urls` straight to `target` (Services, auto-convert) without touching what the
+    /// user has pending. Files that can't become `target` are skipped. Returns the new jobs.
+    @discardableResult
+    func convertNow(_ urls: [URL], to target: FileFormat, in directory: URL? = nil) -> [Job] {
+        let savedPending = pending, savedUnsupported = unsupported
+        pending = []
+        add(urls)
+        pending.removeAll { !matrix.targets(for: $0.format).contains(target) }
+        let before = Set(jobs.map(\.id))
+        directoryOverride = directory
+        if !pending.isEmpty { convert(to: target) }
+        directoryOverride = nil
+        pending = savedPending
+        unsupported = savedUnsupported
+        return jobs.filter { !before.contains($0.id) }
     }
 
     func cancel(_ job: Job) {
