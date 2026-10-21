@@ -194,7 +194,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Documents | TXT, RTF, HTML, DOCX, DOC, ODT ↔ each other, and → PDF (A4) | Tables, lists and images laid out by the system text engine |
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
-| Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
+| Subtitles | SRT, WebVTT, ASS/SSA, SBV, TTML/DFXP, LRC, MicroDVD (.sub), SAMI ↔ each other; time shift option | Bold/italic/underline kept; positions, colours and fonts dropped (with a warning). LRC keeps start times only; MicroDVD assumes 23.976 fps unless the file says |
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
@@ -249,7 +249,7 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | M4R ringtone | — | ✔ | AV | P1 |
 | MIDI → audio (built-in synth) | ✔ | — | AVAudioUnitSampler | P2 |
 | Several MP3s/M4As → one M4B audiobook with chapters | ✔ | ✔ | AV | P1 |
-| LRC synced lyrics ↔ SRT/VTT | ✔ | ✔ | Own | P2 |
+| LRC synced lyrics ↔ SRT/VTT | ✔ | ✔ | Own | ✅ done |
 
 ### Documents
 
@@ -291,7 +291,8 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | Format | In | Out | Engine | Priority |
 |---|---|---|---|---|
 | SRT, WebVTT | ✔ | ✔ | Own | P0 |
-| ASS/SSA, SBV, TTML | ✔ | ✔ | Own | P1 |
+| ASS/SSA, SBV, TTML/DFXP | ✔ | ✔ | Own | ✅ done |
+| LRC, MicroDVD (text .sub), SAMI | ✔ | ✔ | Own | ✅ done |
 
 ### Fonts, 3D, archives
 

@@ -49,8 +49,11 @@ extension FileFormat {
         if let byExtension, [.tga, .raw].contains(byExtension), !bytes.isEmpty {
             return byExtension
         }
+        if let subtitle = sniffSubtitleText(bytes, extension: byExtension) { return subtitle }
         // Text formats with no reliable signature: accept the extension if the bytes look like text.
-        if let byExtension, [.txt, .srt, .vtt, .html, .md].contains(byExtension), looksLikeText(bytes) {
+        // MicroDVD is left out: .sub is also VobSub, a binary format Ameya can't read.
+        let textFormats: Set<FileFormat> = [.txt, .srt, .vtt, .html, .md, .ass, .ssa, .sbv, .ttml, .lrc, .sami]
+        if let byExtension, textFormats.contains(byExtension), looksLikeText(bytes) {
             return byExtension
         }
         return nil
@@ -105,6 +108,7 @@ extension FileFormat {
         let lowered = String(decoding: bytes.prefix(32), as: UTF8.self)
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if lowered.hasPrefix("<!doctype html") || lowered.hasPrefix("<html") { return .html }
+        if let subtitle = sniffSubtitleSignature(bytes) { return subtitle }
 
         // Audio
         if starts("ID3") { return .mp3 }

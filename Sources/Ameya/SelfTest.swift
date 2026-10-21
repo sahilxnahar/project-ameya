@@ -51,6 +51,8 @@ enum SelfTest {
             let srt = directory.appendingPathComponent("captions.srt")
             try Data("1\n00:00:01,000 --> 00:00:02,500\nHello\n".utf8).write(to: srt)
             await check.convert(srt, from: .srt, to: .vtt)
+            await check.convert(srt, from: .srt, to: .ass)
+            await check.convert(srt, from: .srt, to: .ttml)
 
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")
