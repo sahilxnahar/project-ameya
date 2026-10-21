@@ -1,4 +1,3 @@
-import CArchive
 import Foundation
 import ModelIO
 
@@ -49,46 +48,17 @@ extension FileFormat {
 
     // MARK: TAR archive or single compressed file?
 
-    /// Most compressed input read when peeking. A bzip2 block needs up to ~900 KB before any output.
-    static let peekInputLimit = 1 << 20
+    /// Names that promise a compressed TAR archive.
+    static let compressedTarSuffixes = [".tar.gz", ".tar.gzip", ".tgz", ".tar.bz2", ".tbz2", ".tbz", ".tar.xz", ".txz"]
 
-    /// Gzip, bzip2 and xz all sniff as compressed TARs. Decide from the name and, when the name
-    /// doesn't settle it, from whether the decompressed start is a TAR header.
+    /// Gzip, bzip2 and xz all sniff as compressed TARs. The app never decompresses anything to
+    /// look inside (all parsing of file contents happens in the sandboxed worker), so the name
+    /// decides: ".tar.gz"/".tgz" and friends are archives, every other one is a single compressed
+    /// file. Its only target is "Decompress", and the worker reports when the result is a TAR.
     static func refineCompressed(_ format: FileFormat?, url: URL) -> FileFormat? {
         guard let format, let single = format.singleFileVariant else { return format }
         let name = url.lastPathComponent.lowercased()
-        let tarSuffixes = [".tar.gz", ".tar.gzip", ".tgz", ".tar.bz2", ".tbz2", ".tbz", ".tar.xz", ".txz"]
-        if tarSuffixes.contains(where: name.hasSuffix) { return format }
-        var prefix = Data()
-        if let handle = try? FileHandle(forReadingFrom: url) {
-            prefix = (try? handle.read(upToCount: peekInputLimit)) ?? Data()
-            try? handle.close()
-        }
-        switch startsWithTar(compressed: prefix) {
-        case true?: return format
-        case false?: return single
-        case nil: return ["gz", "gzip", "bz2", "xz"].contains(url.pathExtension.lowercased()) ? single : format
-        }
-    }
-
-    /// Whether gzip/bzip2/xz data decompresses to a TAR archive; nil when it can't be told.
-    /// Only the first few hundred decompressed bytes are ever produced.
-    static func startsWithTar(compressed: Data) -> Bool? {
-        guard !compressed.isEmpty, let reader = archive_read_new() else { return nil }
-        defer { archive_read_free(reader) }
-        archive_read_support_filter_gzip(reader)
-        archive_read_support_filter_bzip2(reader)
-        archive_read_support_filter_xz(reader)
-        archive_read_support_format_tar(reader)
-        archive_read_support_format_raw(reader)
-        return compressed.withUnsafeBytes { buffer -> Bool? in
-            guard archive_read_open_memory(reader, buffer.baseAddress, buffer.count) == ARCHIVE_OK else { return nil }
-            var entry: OpaquePointer?
-            guard archive_read_next_header(reader, &entry) >= ARCHIVE_WARN,
-                  archive_filter_count(reader) > 1, // something was actually decompressed
-                  let format = archive_format_name(reader) else { return nil }
-            return String(cString: format).lowercased() != "raw"
-        }
+        return compressedTarSuffixes.contains(where: name.hasSuffix) ? format : single
     }
 
     /// The original file name stored in a gzip header (the FNAME field), reduced to a safe,

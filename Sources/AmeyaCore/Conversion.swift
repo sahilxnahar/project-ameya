@@ -143,6 +143,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case separateTexturesNotIncluded
     case onlyLargestTableKept
     case binaryAsBase64
+    case heldTarArchive
     case transcribedOnDevice
     case externalResourcesSkipped
     // Tools
@@ -192,6 +193,7 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .separateTexturesNotIncluded: "Separate texture and material files (.mtl, images) can't be included."
         case .onlyLargestTableKept: "Only the largest table was kept; convert to JSON or SQL to get every table."
         case .binaryAsBase64: "Binary values (blobs) were written as Base64 text."
+        case .heldTarArchive: "It held a TAR archive, so the result is that archive. Add “.tar” to its name if needed, then drop it on Ameya to unpack or convert it."
         case .transcribedOnDevice: "Transcribed on this Mac; check names and technical terms."
         case .externalResourcesSkipped: "Links to outside images, fonts or style sheets were left out."
         case .locationRemoved: "Location information was removed."

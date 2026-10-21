@@ -56,7 +56,9 @@ struct QuickWinFormatTests {
         try FileManager.default.copyItem(at: single, to: named)
 
         #expect(FileFormat.detect(at: single) == .gz)
-        #expect(FileFormat.detect(at: tarball) == .tgz) // contents win over the ".gz" name
+        // The app never decompresses to look inside: a TAR under a plain ".gz" name is a
+        // "compressed file" (Decompress), and the worker says when the result is a TAR.
+        #expect(FileFormat.detect(at: tarball) == .gz)
         #expect(FileFormat.detect(at: named) == .tgz) // ".tar.gz" names are trusted
         #expect(FileFormat.detect(header: try Data(contentsOf: single), fileExtension: "gz") == .tgz) // header alone can't tell
 
