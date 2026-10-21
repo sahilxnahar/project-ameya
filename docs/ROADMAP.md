@@ -186,7 +186,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 | Family | Converts | Notes |
 |---|---|---|
-| Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; WebP, JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
+| Images | JPEG, PNG, HEIC, animated HEIC, AVIF, TIFF, BMP, GIF, WebP (still and animated), JPEG 2000, PSD, OpenEXR, TGA, Netpbm, KTX, KTX2, ASTC ↔ each other; JPEG XL, camera RAW (30+ brands), DICOM, Radiance HDR, SGI in | Animation and pages kept where the target supports them |
 | Icons | Any image → ICO (16–256 px) and ICNS (16–1024 px), all standard sizes in one file | Padded to a square, centred |
 | Markdown | Markdown ↔ HTML, DOCX, DOC, RTF, ODT, TXT, and → PDF; PDF → Markdown | Headings, lists, tables, code, links, bold/italic. Apple's DOCX writer drops links |
 | Archives | ZIP, TAR, TAR.GZ, TAR.BZ2, TAR.XZ, 7-Zip ↔ each other; RAR in | Unsafe paths, escaping links and zip bombs are blocked |
@@ -201,7 +201,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 
 The full list of formats we could add, with routes and licences, is in the [format catalogue](FORMAT-CATALOGUE.md).
 
-Not yet: MP3 output, WebP output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
+Not yet: MP3 output, reading YAML and XLSX, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.
