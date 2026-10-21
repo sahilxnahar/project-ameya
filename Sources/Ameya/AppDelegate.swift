@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ClipboardActions.removeOldFiles()
         WheelController.shared.start() // The global drag wheel (Wheel/).
         if let ring = WheelController.previewRing(from: CommandLine.arguments) { WheelController.shared.showPreview(ring) }
+        LaunchTiming.mark("finished launching")
+        DispatchQueue.main.async { LaunchTiming.mark("first run loop turn") }
     }
 
     /// Dock drop and "Open With". The system grants the sandbox access to these files.

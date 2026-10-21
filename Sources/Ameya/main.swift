@@ -11,6 +11,11 @@ if CommandLine.arguments.contains("--snapshots") {
     exit(await Snapshots.run() ? 0 : 1)
 }
 
+// `Ameya --bench` measures setup, drop → job start, worker overhead and memory, then exits.
+if CommandLine.arguments.contains("--bench") {
+    exit(await Benchmark.run() ? 0 : 1)
+}
+
 AmeyaApp.main()
 
 struct AmeyaApp: App {
