@@ -269,7 +269,7 @@ for ARCH in $ARCHS; do
         --enable-zlib --enable-mediafoundation \
         --enable-libmp3lame --enable-libopus --enable-libvorbis --enable-libvpx \
         >"$WORK/ffmpeg-configure.log" \
-        && make -j"$JOBS" ffmpeg >/dev/null) || { tail -n 40 "$WORK/ffmpeg/ffbuild/config.log" >&2 || true; exit 1; }
+        && make -j"$JOBS" ffmpeg.exe >/dev/null) || { tail -n 40 "$WORK/ffmpeg/ffbuild/config.log" >&2 || true; exit 1; }
 
     # Refuse to continue if the build somehow became GPL or non-free.
     if grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3) 1' "$WORK/ffmpeg/config.h" >/dev/null; then

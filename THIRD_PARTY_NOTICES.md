@@ -280,3 +280,90 @@ patent infringement, then any patent rights granted to you under this License
 for these implementations of WebM shall terminate as of the date such
 litigation is filed.
 ```
+
+## The Windows FFmpeg helper (`ameya-ffmpeg.exe`)
+
+The Windows app ships the same kind of helper: a **separate executable** that the conversion worker runs
+as a child process; Ameya's code does not link to it. It is built by
+[`scripts/build-ffmpeg-windows.sh`](scripts/build-ffmpeg-windows.sh) (CI:
+[`.github/workflows/windows-ffmpeg.yml`](.github/workflows/windows-ffmpeg.yml)), which cross-compiles one
+static, self-contained `.exe` per architecture (x64 and arm64, for Windows 10 22H2 and Windows 11) from the
+**same** FFmpeg 8.1.3, LAME 3.100, libopus 1.5.2, libvorbis 1.3.7, libogg 1.3.6 and libvpx 1.15.2 tarballs
+and SHA-256 sums as the macOS helper above, plus:
+
+| Component | Version | Licence | Source (exact tarball) | SHA-256 |
+|---|---|---|---|---|
+| zlib | 1.3.2 | zlib | https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz | `d7a0654783a4da529d1bb793b7ad9c3318020af77667bcae35f95d0e42a792f3` |
+
+Build tools, not shipped: NASM 2.16.03 (as above) and the llvm-mingw 20261006 cross toolchain
+(https://github.com/mstorsjo/llvm-mingw, pinned by SHA-256 in the script). The toolchain's mingw-w64 runtime
+(UCRT start-up code and import libraries), winpthreads and LLVM compiler-rt builtins are linked into the
+`.exe`. They are under permissive licences (mingw-w64 runtime: ZPL-2.1 / public domain and others listed in
+its notice; winpthreads: MIT and BSD-3-Clause; compiler-rt: Apache-2.0 WITH LLVM-exception). The build copies
+their exact texts (`COPYING.MinGW-w64-runtime.txt`, `COPYING.winpthreads.txt`, `LLVM-compiler-rt-LICENSE.txt`)
+and FFmpeg's `COPYING.LGPLv2.1` into a `licenses/` folder that is distributed next to the `.exe`.
+
+Licensing is the same as on macOS: no `--enable-gpl`, no `--enable-nonfree` (the script also refuses
+`--enable-version3`), so the helper is LGPL-2.1-or-later; no x264, x265, Xvid or FDK-AAC code. H.264, HEVC and
+AAC can be encoded by Windows' Media Foundation (`h264_mf`, `hevc_mf`, `aac_mf`), which is part of Windows
+and is loaded at run time; AAC is also available from FFmpeg's own encoder. The script stops if `config.h`
+reports GPL, LGPLv3 or non-free, if a requested encoder is missing, or if the `.exe` imports any DLL other
+than Windows system DLLs.
+
+Differences from the macOS helper: the VideoToolbox encoders (`h264_videotoolbox`, `hevc_videotoolbox`) are
+replaced by `h264_mf` and `hevc_mf`; `aac_mf` is added; zlib is linked statically instead of using the system
+copy. The demuxer, muxer, decoder, parser, bitstream-filter and filter lists are identical.
+
+### Exact FFmpeg configure line (Windows)
+
+For each architecture (`TRIPLE` is `x86_64-w64-mingw32` or `aarch64-w64-mingw32`, `FF_ARCH` is `x86_64` or
+`aarch64`, `PREFIX` is the folder the static libraries above were installed into; the `--enable-demuxer`,
+`--enable-muxer`, `--enable-decoder`, `--enable-parser`, `--enable-bsf` and `--enable-filter` lists are the
+macOS ones above):
+
+```
+./configure --prefix=$PREFIX --arch=$FF_ARCH --target-os=mingw32 --enable-cross-compile \
+  --cross-prefix=$TRIPLE- --cc=$TRIPLE-clang --cxx=$TRIPLE-clang++ \
+  --extra-cflags='-I$PREFIX/include' --extra-ldflags='-L$PREFIX/lib -static' \
+  --pkg-config=pkg-config --pkg-config-flags=--static \
+  --disable-everything --disable-autodetect --disable-network --disable-shared --enable-static --disable-debug --disable-doc \
+  --disable-ffplay --disable-ffprobe --disable-avdevice \
+  --enable-ffmpeg --enable-avcodec --enable-avformat --enable-avfilter --enable-swscale --enable-swresample \
+  --enable-protocol='file,pipe' \
+  --enable-demuxer=... --enable-muxer=... --enable-decoder=... --enable-parser=... --enable-bsf=... --enable-filter=... \
+  --enable-encoder='libmp3lame,libvorbis,libopus,libvpx_vp8,libvpx_vp9,h264_mf,hevc_mf,aac_mf,aac,mpeg4,flac,alac,pcm_s16le,pcm_s24le,pcm_s16be,pcm_s24be' \
+  --enable-zlib --enable-mediafoundation \
+  --enable-libmp3lame --enable-libopus --enable-libvorbis --enable-libvpx
+```
+
+### Source code (LGPL, Windows)
+
+The complete corresponding source for `ameya-ffmpeg.exe` is the unmodified upstream tarballs listed above
+(identified by their SHA-256 sums) and `scripts/build-ffmpeg-windows.sh`, which records every configure option
+and the build fixes applied (removing the undefined `lame_init_old` symbol from LAME's export list, as on
+macOS, and giving LAME the newer `config.sub`/`config.guess` from the libogg 1.3.6 tarball so it recognises
+`aarch64-w64-mingw32`). CI produces it as `ameya-ffmpeg-windows-sources.tar.gz` (tarballs, `SHA256SUMS`, the
+script, this file and `LICENSES/`). The release and written-offer terms above apply to Windows releases in the
+same way; because the helper is a separate executable, you may replace `ameya-ffmpeg.exe` with your own build.
+
+### zlib 1.3.2
+
+```
+Copyright (C) 1995-2026 Jean-loup Gailly and Mark Adler
+
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required.
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
+```
