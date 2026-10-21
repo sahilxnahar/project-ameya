@@ -10,7 +10,7 @@ Status: ✅ done · 🚧 in progress · ⬜ not started.
 
 1. **Originals are never modified.** Every job writes a new file. A checksum proves the source is unchanged.
 2. **The interface never freezes.** All file work runs in a separate sandboxed worker process with time and memory limits. Cancel kills the worker; a crash fails one job, not the app.
-3. **Private by default.** No network access for file processing. AI features run on-device only.
+3. **Everything stays on this Mac.** No network access at all: no accounts, no servers, no uploads, no downloads. The app and its workers have no network permission, and a test enforces it. Smart features use models already on the Mac.
 4. **Honest output.** If a conversion loses something (transparency, layers, pages, quality), the app says so before it runs.
 5. **Tested on real files.** Every engine ships with fixtures and round-trip tests. CI runs on every push.
 6. **Licence-clean.** MPL-2.0 project code. No GPL code. Satsuma (MIT) may be reused with credit. FFmpeg only as an LGPL build without GPL encoders; H.264/HEVC encoding uses Apple VideoToolbox.
@@ -136,8 +136,8 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Checksums + verify a download against a published hash | P0 | ⬜ |
 | Batch rename (patterns, date taken, content-based names) | P1 | ⬜ |
 | Password-encrypt a file (opens on other platforms) | P1 | ⬜ |
-| Send to phone over Wi-Fi via QR code (local, expiring) | P1 | ⬜ |
-| AirDrop, iCloud Drive / Dropbox folder save | P1 | ⬜ |
+| Send to phone over Wi-Fi | — | Not planned (needs the network) |
+| Share sheet (AirDrop, Messages, Mail) handled by macOS, not by Ameya | P2 | ⬜ |
 | QR code create and read | P1 | ⬜ |
 | Sort into folders by date/place, find largest files, duplicate cleanup | P2 | ⬜ |
 | Base64, split/join large files, check an app's code signature | P2 | ⬜ |
@@ -178,7 +178,7 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Universal binary, macOS 14+ | P0 | ✅ |
 | Accessibility audit (VoiceOver, keyboard, Reduce Motion/Transparency) | P0 | ⬜ |
 | Developer ID signing + notarization + auto-update (needs Apple Developer account) | P0 | ⬜ |
-| Website with docs and downloads | P1 | ⬜ |
+| Project website (static, outside the app) | P2 | ⬜ |
 
 ## Formats
 
@@ -262,7 +262,7 @@ Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL 
 | DOCX, DOC, ODT, WordML | ✔ | ✔ | TU | P0 |
 | PDF ↔ DOCX / TXT (with OCR fallback) | ✔ | ✔ | PK + Vision + Own | P0 |
 | Markdown | ✔ | ✔ | Own | P0 |
-| Web page URL / .webarchive → PDF, Markdown | ✔ | — | WK | P1 |
+| .webarchive → PDF, Markdown (web page URLs: not planned, needs the network) | ✔ | — | WK | P1 |
 | EPUB ↔ PDF, EPUB from Markdown/DOCX | ✔ | ✔ | WK + Own | P1 |
 | EML / MSG → PDF | ✔ | — | Own + WK | P1 |
 | Pages, Numbers, Keynote (preview-based export) | ✔ | — | Quick Look | P2 |
