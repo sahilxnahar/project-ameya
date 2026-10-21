@@ -10,6 +10,8 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
     case raw, jxl, dicom, hdr, sgi
     // Documents
     case pdf, txt, rtf, html, docx, doc, odt, md
+    // E-books and comic archives (document family). CBR can only be read.
+    case epub, cbz, cbr
     // Audio. `alac` is Apple Lossless in an .m4a file; it is only ever a target.
     case mp3, m4a, alac, wav, aiff, caf, flac
     // Video
@@ -42,7 +44,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .jpeg, .png, .heic, .avif, .webp, .tiff, .bmp, .gif,
              .heics, .jp2, .psd, .exr, .tga, .pbm, .ktx, .ktx2, .astc, .ico, .icns,
              .raw, .jxl, .dicom, .hdr, .sgi: .image
-        case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md: .document
+        case .pdf, .txt, .rtf, .html, .docx, .doc, .odt, .md, .epub, .cbz, .cbr: .document
         case .mp3, .m4a, .alac, .wav, .aiff, .caf, .flac: .audio
         case .mp4, .mov, .m4v: .video
         case .srt, .vtt: .subtitle
@@ -84,6 +86,9 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .doc: "Word 97 (DOC)"
         case .odt: "OpenDocument"
         case .md: "Markdown"
+        case .epub: "EPUB"
+        case .cbz: "Comic book (CBZ)"
+        case .cbr: "Comic book (CBR)"
         case .mp3: "MP3"
         case .m4a: "AAC (M4A)"
         case .alac: "Apple Lossless"
@@ -141,6 +146,9 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         case .doc: "com.microsoft.word.doc"
         case .odt: "org.oasis-open.opendocument.text"
         case .md: "net.daringfireball.markdown"
+        case .epub: "org.idpf.epub-container"
+        case .cbz: "public.cbz-archive"
+        case .cbr: "public.cbr-archive"
         case .mp3: "public.mp3"
         case .m4a, .alac: "com.apple.m4a-audio"
         case .wav: "com.microsoft.waveform-audio"
@@ -252,7 +260,7 @@ public enum FileFormat: String, Codable, Sendable, CaseIterable, Identifiable {
         return Set(allCases.filter { format in
             switch format {
             case .mp3: false // needs the LGPL MP3 encoder (planned)
-            case .rar: false // proprietary; extraction only
+            case .rar, .cbr: false // proprietary; extraction only
             case _ where format.family == .image: encodable.contains(format.typeIdentifier)
             default: true
             }

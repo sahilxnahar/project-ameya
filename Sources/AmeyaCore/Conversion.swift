@@ -63,6 +63,11 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
     case rawDevelopedWithDefaults
     case unsafeEntriesSkipped
     case specialFilesSkipped
+    // E-books and comics
+    case bookLayoutReflowed
+    case imagesDropped
+    case nonImagesSkipped
+    case pagesBecamePictures
 
     public var message: String {
         switch self {
@@ -82,6 +87,10 @@ public enum ConversionNote: String, Codable, Sendable, Equatable {
         case .rawDevelopedWithDefaults: "The RAW photo was developed with the camera's default settings."
         case .unsafeEntriesSkipped: "Entries with unsafe paths (absolute, or containing ..) were left out."
         case .specialFilesSkipped: "Links pointing outside the archive and special files were left out."
+        case .bookLayoutReflowed: "Page layout and the book's own styling are not kept; the text reflows."
+        case .imagesDropped: "Some pictures couldn't be found in the file and were left out."
+        case .nonImagesSkipped: "Files in the comic that aren't pictures were left out."
+        case .pagesBecamePictures: "Each page became a JPEG picture, so its text can no longer be selected."
         }
     }
 }
@@ -117,6 +126,7 @@ public struct ConversionMatrix: Sendable {
     /// Whether Ameya has an engine for this pair, regardless of what this Mac can encode.
     public static func canConvert(from source: FileFormat, to target: FileFormat) -> Bool {
         guard source != target else { return false }
+        if let route = bookRoute(from: source, to: target) { return route }
         switch (source.family, target.family) {
         case (.image, .image): return true
         case (.image, .document): return target == .pdf
@@ -142,6 +152,7 @@ public struct ConversionMatrix: Sendable {
 
     /// Losses that *may* happen, shown before converting. The worker reports what actually happened.
     public func possibleLosses(from source: FileFormat, to target: FileFormat) -> [ConversionNote] {
+        if let notes = Self.bookLosses(from: source, to: target) { return notes }
         switch (source.family, target.family) {
         case (.document, .document) where source == .pdf:
             return target == .md ? [.onlyTextKept, .markdownSimplified] : [.onlyTextKept]

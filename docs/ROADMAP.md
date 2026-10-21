@@ -195,8 +195,10 @@ macOS versions (e.g. on-device language models on macOS 26) are switched on only
 | Audio | MP3, M4A, WAV, AIFF, CAF, FLAC in → AAC, Apple Lossless, WAV, AIFF, CAF, FLAC | Up to stereo; AAC capped at 48 kHz |
 | Video | MP4, MOV, M4V ↔ each other; video → GIF (first 30 s); GIF → MP4/MOV; sound from any video | Hardware encoding |
 | Subtitles | SRT ↔ WebVTT | WebVTT positioning dropped (with a warning) |
+| E-books | EPUB → PDF, HTML, Markdown, TXT, DOCX, DOC, RTF, ODT; Markdown, HTML, DOCX, DOC, RTF, ODT, TXT → EPUB 3 | Chapters split at h1/h2; pictures carried over; DRM-protected books refused |
+| Comics | CBZ, CBR → PDF (natural page order); CBR → CBZ; PDF → CBZ (one JPEG per page) | JPEG pages embedded without re-encoding |
 
-Not yet: MP3 output, WebP output, EPUB, data formats, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
+Not yet: MP3 output, WebP output, data formats, extracting archives to a folder, the FFmpeg-based formats (MKV, WebM, …).
 
 Engines: **IIO** ImageIO · **PK** PDFKit · **AV** AVFoundation · **FF** LGPL FFmpeg · **TU** textutil ·
 **WK** WebKit · **MI** Model I/O · **LA** libarchive · **Own** our own Swift code.
