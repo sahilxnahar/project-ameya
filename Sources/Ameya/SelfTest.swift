@@ -9,7 +9,7 @@ import Speech
 /// Run as `Ameya.app/Contents/MacOS/Ameya --self-test`.
 enum SelfTest {
     static func run() async -> Bool {
-        guard let worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker") else {
+        guard let runner = WorkerRunner.bundled(timeout: .seconds(120)) else {
             print("FAIL worker executable not found in bundle")
             return false
         }
@@ -19,11 +19,12 @@ enum SelfTest {
 
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            var check = Checker(runner: WorkerRunner(executable: worker, timeout: .seconds(120)), directory: directory)
+            var check = Checker(runner: runner, directory: directory)
 
             let png = directory.appendingPathComponent("source.png")
             let originalPNG = try makeTransparentPNG()
             try originalPNG.write(to: png)
+            await check.checkWorkerContainment(ownFile: png) // see SelfTestSandbox.swift
             let matrix = ConversionMatrix(writable: FileFormat.systemWritable())
             // PNG → text reads QR codes and PNG → Word/Markdown recognises words; both tested with real content.
             for target in matrix.targets(for: .png) where ![.txt, .docx, .md].contains(target) {

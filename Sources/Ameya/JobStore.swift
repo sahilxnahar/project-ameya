@@ -88,7 +88,6 @@ final class JobStore: ObservableObject {
     var outputDirectory: URL { directoryOverride ?? OutputLocation.directory(default: defaultOutputDirectory) }
     let defaultOutputDirectory: URL
     private var directoryOverride: URL?
-    private let worker: URL?
     private let maxConcurrent = max(1, min(4, ProcessInfo.processInfo.activeProcessorCount / 2))
     private var running = 0
     private var reserved: Set<URL> = []
@@ -98,7 +97,6 @@ final class JobStore: ObservableObject {
         matrix = ConversionMatrix(writable: writable)
         catalog = ToolCatalog(writable: writable)
         defaultOutputDirectory = Self.realDownloadsDirectory().appendingPathComponent("Ameya", isDirectory: true)
-        worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker")
         Self.removeStaleScratchFolders()
     }
 
@@ -243,12 +241,11 @@ final class JobStore: ObservableObject {
     }
 
     private func start(_ job: Job) {
-        guard let worker else {
+        guard let runner = WorkerRunner.bundled(timeout: job.timeout) else {
             job.state = .failed("The converter is missing from the app bundle.")
             finished.send(job)
             return
         }
-        let runner = WorkerRunner(executable: worker, timeout: job.timeout)
         running += 1
         job.state = .running
         job.task = Task { [weak self] in

@@ -26,6 +26,8 @@ let package = Package(
                 linkerSettings: [.linkedLibrary("sqlite3")]),
         // One short-lived, sandboxed process per job. Reads stdin, writes stdout.
         .executableTarget(name: "AmeyaWorker", dependencies: ["AmeyaCore", "AmeyaEngines"]),
+        // The XPC service that starts workers in a sandbox with no access to the user's files.
+        .executableTarget(name: "AmeyaLauncher", dependencies: ["AmeyaCore"]),
         // The menu bar app.
         .executableTarget(name: "Ameya", dependencies: ["AmeyaCore"]),
 

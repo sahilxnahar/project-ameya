@@ -46,13 +46,12 @@ enum ClipboardActions {
             publish(input, as: target)
             return
         }
-        guard let worker = Bundle.main.url(forAuxiliaryExecutable: "AmeyaWorker") else { return }
+        guard let runner = WorkerRunner.bundled(timeout: format.family.timeout) else { return }
         let destination = ClipboardImage.temporaryURL(for: target, date: Date(), in: folder) {
             FileManager.default.fileExists(atPath: $0.path)
         }
         Task {
             do {
-                let runner = WorkerRunner(executable: worker, timeout: format.family.timeout)
                 _ = try await runner.run(input: input, destination: destination,
                                          request: ConversionRequest(source: format, target: target)) { _ in }
                 publish(destination, as: target)

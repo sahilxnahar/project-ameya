@@ -2,7 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- The worker runs inside the app's sandbox and only uses the file descriptors it is handed. -->
+	<!-- The worker (and the FFmpeg helper) inherit the sandbox of whoever starts them: the
+	     AmeyaLauncher XPC service, which has no file entitlements, never the app itself.
+	     They only use the file descriptors they are handed (see WorkerSandbox). -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
 	<key>com.apple.security.inherit</key>

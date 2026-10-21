@@ -18,6 +18,12 @@ public struct ConversionOptions: Codable, Sendable, Equatable {
     /// Test hooks. Only honoured by DEBUG builds of the worker.
     public var debugDelaySeconds: Double?
     public var debugCrash: Bool?
+    /// Allocates and touches this many bytes, then waits (memory ceiling tests). Set after `init`.
+    public var debugAllocateBytes: Int? = nil
+    /// Writes to the output forever (disk cap tests). Set after `init`.
+    public var debugWriteEndlessly: Bool? = nil
+    /// Starts the FFmpeg helper (left waiting forever) and exits, naming its pid (group kill tests).
+    public var debugStartHelper: Bool? = nil
     /// Spoken language for transcription, as a BCP-47 tag such as "en-GB". `nil` uses the Mac's language.
     public var language: String?
     /// Moves every subtitle earlier (negative) or later (positive) by this many milliseconds.
