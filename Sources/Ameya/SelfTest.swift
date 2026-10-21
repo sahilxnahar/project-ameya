@@ -140,6 +140,7 @@ enum SelfTest {
             await check.checkPassportPhoto(png: png) // see SelfTestPassport.swift
             await check.checkPresets() // see SelfTestPresets.swift
             await check.checkPDFToolbox() // see SelfTestPDF.swift
+            await check.checkRecipes() // see SelfTestRecipes.swift
 
             let unchanged = (try? Data(contentsOf: png)) == originalPNG
             print("\(unchanged ? "PASS" : "FAIL") source file unchanged")

@@ -26,10 +26,14 @@ struct AmeyaApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 560, height: 640)
 
-        MenuBarExtra("Ameya", systemImage: "arrow.triangle.2.circlepath") {
+        MenuBarExtra {
             MenuBarContent()
                 .environmentObject(delegate.store)
                 .environmentObject(delegate.results)
+                .environmentObject(delegate.recipes)
+                .environmentObject(delegate.watchFolders)
+        } label: {
+            MenuBarLabel(watch: delegate.watchFolders) // RecipeMenuItems.swift
         }
 
         Settings {
@@ -59,6 +63,8 @@ struct MenuBarContent: View {
             Button("PDF") { ClipboardActions.copy(as: .pdf) }
         }
         WheelMenuItems()
+        RecipeMenuItems()
+        WatchMenuItems()
         Divider()
         Menu("Recent") {
             let recent = results.recent.items.prefix(8)

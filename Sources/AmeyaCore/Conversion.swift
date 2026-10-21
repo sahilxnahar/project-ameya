@@ -264,7 +264,7 @@ public struct ConversionResult: Codable, Sendable, Equatable {
 
 /// Which conversions are offered, and what may be lost, before anything runs.
 public struct ConversionMatrix: Sendable {
-    private let writable: Set<FileFormat>
+    public let writable: Set<FileFormat>
 
     /// - Parameter writable: formats the current system can encode. The app passes the
     ///   formats ImageIO reports as writable, so unsupported targets are never offered.

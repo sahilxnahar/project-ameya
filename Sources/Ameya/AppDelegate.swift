@@ -10,7 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) weak var shared: AppDelegate?
 
     let store = JobStore()
-    lazy var autoConverter = AutoConverter(store: store)
+    /// The user's recipes (RecipeLibrary.swift) and watched folders (WatchFolders.swift).
+    lazy var recipes = RecipeLibrary(store: store)
+    lazy var watchFolders = WatchFolders(store: store, recipes: recipes)
     /// Batch headlines, Recent and Undo. Made at launch so it hears about every job.
     lazy var results = ResultsModel(store: store)
     private let services = ServiceProvider()
@@ -27,7 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = results
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
-        autoConverter.applySettings()
+        watchFolders.start()
         ClipboardActions.removeOldFiles()
         WheelController.shared.start() // The global drag wheel (Wheel/).
         if let ring = WheelController.previewRing(from: CommandLine.arguments) { WheelController.shared.showPreview(ring) }
@@ -35,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Dock drop and "Open With". The system grants the sandbox access to these files.
     func application(_ application: NSApplication, open urls: [URL]) {
-        receive(urls)
+        let recipeFiles = urls.filter { $0.pathExtension.lowercased() == RecipeFile.fileExtension }
+        if !recipeFiles.isEmpty { RecipeEditorWindow.importFiles(recipeFiles) }
+        let others = urls.filter { $0.pathExtension.lowercased() != RecipeFile.fileExtension }
+        if !others.isEmpty { receive(others) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

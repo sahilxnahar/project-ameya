@@ -41,6 +41,8 @@ struct Tool: Identifiable {
     /// in "photo (India passport).jpg").
     var suffixForOptions: ((ConversionOptions) -> String)?
     var folderForOptions: ((ConversionOptions) -> Bool)?
+    /// Set for a user's recipe (RecipeLibrary.swift): the store runs its steps one by one.
+    var recipe: Recipe?
 
     func outputSuffix(for options: ConversionOptions) -> String { suffixForOptions?(options) ?? outputSuffix }
     func producesFolder(for options: ConversionOptions) -> Bool { folderForOptions?(options) ?? producesFolder }
@@ -67,10 +69,12 @@ struct Tool: Identifiable {
 
 /// The registry of tools, built once for this Mac's encoders.
 struct ToolCatalog {
-    let tools: [Tool]
+    /// The tools Ameya ships with, then the user's recipes (`recipeTools()`, RecipeLibrary.swift).
+    var tools: [Tool] { builtInTools + recipeTools() }
+    let builtInTools: [Tool]
 
     init(writable: Set<FileFormat>) {
-        tools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
+        builtInTools = Self.imageTools(writable: writable) + Self.passportTools(writable: writable) + Self.pdfTools()
             + Self.sizePresetTools(writable: writable) + Self.pdfToolbox() // SizePresets.swift, PDFToolbox
     }
 

@@ -70,10 +70,29 @@ public struct RecipeAnalysis: Equatable, Sendable {
 public struct RecipePlanner {
     public let matrix: ConversionMatrix
     private let tools: [String: RecipeToolInfo]
+    /// Looked up once: `ConversionMatrix.canConvert(from:to:)` checks the disk on every call.
+    private let ffmpeg: Bool
 
-    public init(matrix: ConversionMatrix, tools: [RecipeToolInfo]) {
+    public init(matrix: ConversionMatrix, tools: [RecipeToolInfo], ffmpeg: Bool = FFmpegAvailability.isAvailable) {
         self.matrix = matrix
         self.tools = Dictionary(tools.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        self.ffmpeg = ffmpeg
+    }
+
+    /// Same answer as `matrix.targets(for: source).contains(target)`, without the disk lookups.
+    public func canConvert(_ source: FileFormat, to target: FileFormat) -> Bool {
+        source != target && matrix.writable.contains(target)
+            && ConversionMatrix.canConvert(from: source, to: target, ffmpeg: ffmpeg)
+    }
+
+    /// Every format this Mac can make from some other format, in display order.
+    public var reachableTargets: [FileFormat] {
+        FileFormat.allCases.filter { target in Self.candidateSources.contains { canConvert($0, to: target) } }
+    }
+
+    /// Source formats that can become `target`.
+    public func sources(convertingTo target: FileFormat) -> [FileFormat] {
+        Self.candidateSources.filter { canConvert($0, to: target) }
     }
 
     /// Formats a recipe could start from: every real format.
@@ -92,8 +111,7 @@ public struct RecipePlanner {
     /// The worker jobs for a file of `source`, or `nil` when the recipe doesn't suit it.
     /// Empty when every step is a conversion to the format the file already has.
     public func plan(_ recipe: Recipe, for source: FileFormat) -> [PlannedRecipeStep]? {
-        var cache: [FileFormat: Set<FileFormat>] = [:]
-        return plan(recipe, for: source, cache: &cache)
+        plan(recipe, for: source, steps: recipe.steps)
     }
 
     /// The format a file of `source` ends up in, or `nil` when the recipe doesn't suit it.
@@ -112,13 +130,12 @@ public struct RecipePlanner {
                 return RecipeAnalysis(accepts: [], produces: [], problem: .unknownTool(step: index + 1, id: id))
             }
         }
-        var cache: [FileFormat: Set<FileFormat>] = [:]
         // Each surviving source, and the format it has reached so far.
         var alive: [(source: FileFormat, current: FileFormat)] = candidates.map { ($0, $0) }
         for (index, step) in recipe.steps.enumerated() {
             let arriving = index == 0 ? [] : Self.unique(alive.map(\.current))
             alive = alive.compactMap { pair in
-                next(after: pair.current, through: step, cache: &cache).map { (pair.source, $0.target) }
+                next(after: pair.current, through: step).map { (pair.source, $0.target) }
             }
             if alive.isEmpty {
                 let problem = RecipeProblem.stepDoesNotFit(step: index + 1, title: title(of: step), after: arriving)
@@ -130,13 +147,12 @@ public struct RecipePlanner {
 
     // MARK: Internals
 
-    private func plan(_ recipe: Recipe, for source: FileFormat,
-                      cache: inout [FileFormat: Set<FileFormat>]) -> [PlannedRecipeStep]? {
-        guard !recipe.steps.isEmpty, recipe.steps.count <= Recipe.maxSteps else { return nil }
+    private func plan(_ recipe: Recipe, for source: FileFormat, steps: [RecipeStep]) -> [PlannedRecipeStep]? {
+        guard !steps.isEmpty, steps.count <= Recipe.maxSteps else { return nil }
         var current = source
         var planned: [PlannedRecipeStep] = []
-        for (index, step) in recipe.steps.enumerated() {
-            guard let move = next(after: current, through: step, cache: &cache) else { return nil }
+        for (index, step) in steps.enumerated() {
+            guard let move = next(after: current, through: step) else { return nil }
             if let request = move.request {
                 planned.append(PlannedRecipeStep(number: index + 1, title: title(of: step), request: request))
             }
@@ -147,14 +163,11 @@ public struct RecipePlanner {
 
     /// Where one step takes a file of `format`: the format it ends in, and the request to get
     /// there (`nil` for a conversion that isn't needed). `nil` when the step doesn't fit.
-    private func next(after format: FileFormat, through step: RecipeStep,
-                      cache: inout [FileFormat: Set<FileFormat>]) -> (target: FileFormat, request: ConversionRequest?)? {
+    private func next(after format: FileFormat, through step: RecipeStep) -> (target: FileFormat, request: ConversionRequest?)? {
         switch step {
         case let .convert(target):
             if target == format { return (target, nil) }
-            let targets = cache[format] ?? Set(matrix.targets(for: format))
-            cache[format] = targets
-            guard targets.contains(target) else { return nil }
+            guard canConvert(format, to: target) else { return nil }
             return (target, ConversionRequest(source: format, target: target))
         case let .tool(id):
             guard let tool = tools[id], var request = tool.request(format) else { return nil }

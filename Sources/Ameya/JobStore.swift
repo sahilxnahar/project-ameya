@@ -42,6 +42,8 @@ final class Job: ObservableObject, Identifiable {
     @Published var state: State = .queued
     @Published var progress: Double = 0
     var task: Task<Void, Never>?
+    /// For a recipe: its worker jobs, run one after another (RecipeJobs.swift).
+    var recipeSteps: [PlannedRecipeStep]?
 
     init(sources: [URL], sourceFormats: [FileFormat], destination: URL, isFolder: Bool = false,
          request: ConversionRequest, toolTitle: String? = nil) {
@@ -84,6 +86,8 @@ final class JobStore: ObservableObject {
 
     let matrix: ConversionMatrix
     let catalog: ToolCatalog
+    /// Checks and plans recipes against this Mac's conversions and tools.
+    lazy var recipePlanner = catalog.recipePlanner(matrix: matrix)
     /// Where conversions are saved: Settings' choice (OutputLocation.swift), or a one-off override.
     var outputDirectory: URL { directoryOverride ?? OutputLocation.directory(default: defaultOutputDirectory) }
     let defaultOutputDirectory: URL
@@ -175,12 +179,14 @@ final class JobStore: ObservableObject {
     /// Runs `tool` on `urls` straight away (the drag wheel) without touching what the user has
     /// pending. Does nothing if the tool doesn't suit every file. Returns the new jobs.
     @discardableResult
-    func runNow(_ tool: Tool, on urls: [URL]) -> [Job] {
+    func runNow(_ tool: Tool, on urls: [URL], in directory: URL? = nil) -> [Job] {
         let savedPending = pending, savedUnsupported = unsupported
         pending = []
         add(urls)
         let before = Set(jobs.map(\.id))
+        directoryOverride = directory
         run(tool)
+        directoryOverride = nil
         pending = savedPending
         unsupported = savedUnsupported
         return jobs.filter { !before.contains($0.id) }
@@ -205,8 +211,13 @@ final class JobStore: ObservableObject {
                 ? OutputPlanner.folderDestination(for: first.url, suffix: suffix, in: outputDirectory, isTaken: isTaken)
                 : OutputPlanner.destination(for: first.url, target: request.target, in: outputDirectory,
                                             suffix: suffix, isTaken: isTaken)
-            enqueue(Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
-                        isFolder: isFolder, request: request, toolTitle: tool.title))
+            let job = Job(sources: files.map(\.url), sourceFormats: files.map(\.format), destination: destination,
+                          isFolder: isFolder, request: request, toolTitle: tool.title)
+            if let recipe = tool.recipe {
+                guard let steps = recipePlanner.plan(recipe, for: first.format) else { continue }
+                job.recipeSteps = steps
+            }
+            enqueue(job)
         }
         pending = []
         startQueuedJobs()
@@ -259,8 +270,13 @@ final class JobStore: ObservableObject {
                 return
             }
             do {
-                let result = try await runner.run(inputs: job.sources, destination: job.destination, request: job.request) { value in
-                    Task { @MainActor in job.progress = value }
+                let report: @Sendable (Double) -> Void = { value in Task { @MainActor in job.progress = value } }
+                let result = if let steps = job.recipeSteps {
+                    try await RecipeJobs.run(steps, input: job.sources[0], destination: job.destination,
+                                             worker: worker, progress: report)
+                } else {
+                    try await runner.run(inputs: job.sources, destination: job.destination, request: job.request,
+                                         progress: report)
                 }
                 job.progress = 1
                 job.state = .done(result)

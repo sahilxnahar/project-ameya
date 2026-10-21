@@ -4,8 +4,6 @@ import SwiftUI
 
 /// Ameya → Settings…  Everything is off or harmless by default.
 struct SettingsView: View {
-    @AppStorage(AutoConverter.enabledKey) private var autoConvert = false
-    @AppStorage(AutoConverter.originalKey) private var original = AutoConverter.Original.keep.rawValue
     @AppStorage(OutputLocation.choiceKey) private var location = OutputLocation.Choice.downloads.rawValue
     @State private var folderName = OutputLocation.chosenFolder()?.lastPathComponent
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -33,20 +31,11 @@ struct SettingsView: View {
                 }
             }
 
-            Section("iPhone photos") {
-                Toggle("Automatically convert iPhone photos (HEIC) in Downloads to JPEG", isOn: $autoConvert)
-                    .accessibilityHint("New HEIC photos that arrive in Downloads get a JPEG copy next to them")
-                    .accessibilityIdentifier("settings-auto-heic")
-                Picker("After converting, the original photo", selection: $original) {
-                    Text("Stays where it is").tag(AutoConverter.Original.keep.rawValue)
-                    Text("Moves to the Trash (you can put it back)").tag(AutoConverter.Original.trash.rawValue)
-                }
-                .disabled(!autoConvert)
-                Text("Only photos that arrive while Ameya is open are converted.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            WatchFoldersSection() // WatchFoldersSettings.swift; includes the old iPhone-photos setting
+            Section("Recipes") {
+                Button("Edit Recipes…") { RecipeEditorWindow.show() }
+                    .accessibilityHint("Opens the window where you build step-by-step recipes")
             }
-            .onChange(of: autoConvert) { _, _ in AppDelegate.shared?.autoConverter.applySettings() }
 
             WheelSettingsSection()
             Section("Fun") {
