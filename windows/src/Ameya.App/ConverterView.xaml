@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one converter surface, shown in both the tray panel and the main window.
+     Every control has a UI Automation name and help text; everything works from the keyboard
+     (Tab, Enter, Ctrl+O to choose files, Ctrl+V to paste files); only theme brushes are used, so
+     high-contrast themes apply; no custom animations (WinUI's own follow "Show animations"). -->
+<UserControl
+    x:Class="Ameya.App.ConverterView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.KeyboardAccelerators>
+        <KeyboardAccelerator Modifiers="Control" Key="V" Invoked="OnPasteAccelerator" />
+    </UserControl.KeyboardAccelerators>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="12" Padding="16">
+            <Border
+                x:Name="DropArea"
+                AllowDrop="True"
+                DragOver="OnDragOver"
+                Drop="OnDrop"
+                Padding="16"
+                CornerRadius="8"
+                BorderThickness="2"
+                BorderBrush="{ThemeResource AccentFillColorDefaultBrush}"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                AutomationProperties.Name="Drop area"
+                AutomationProperties.HelpText="Drop files here to convert them. You can also use Choose files, or paste files with Control+V.">
+                <StackPanel Spacing="8" HorizontalAlignment="Center">
+                    <TextBlock Text="Drop files here" Style="{ThemeResource SubtitleTextBlockStyle}" HorizontalAlignment="Center" />
+                    <Button
+                        x:Name="ChooseButton"
+                        Content="Choose files…"
+                        Click="OnChoose"
+                        HorizontalAlignment="Center"
+                        Style="{ThemeResource AccentButtonStyle}"
+                        AutomationProperties.Name="Choose files"
+                        AutomationProperties.HelpText="Opens a window to pick files to convert. Shortcut: Control+O.">
+                        <Button.KeyboardAccelerators>
+                            <KeyboardAccelerator Modifiers="Control" Key="O" />
+                        </Button.KeyboardAccelerators>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <TextBlock
+                x:Name="StatusText"
+                TextWrapping="Wrap"
+                AutomationProperties.Name="Status"
+                AutomationProperties.LiveSetting="Polite" />
+            <ProgressBar
+                x:Name="JobProgress"
+                Maximum="1"
+                Visibility="Collapsed"
+                AutomationProperties.Name="Conversion progress" />
+            <Button
+                x:Name="CancelButton"
+                Content="Cancel"
+                Click="OnCancel"
+                Visibility="Collapsed"
+                AutomationProperties.Name="Cancel conversion"
+                AutomationProperties.HelpText="Stops the conversion. Files already converted are kept." />
+
+            <StackPanel x:Name="PendingSection" Spacing="4" Visibility="Collapsed">
+                <TextBlock Text="Waiting" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <ListView
+                    x:Name="PendingList"
+                    SelectionMode="None"
+                    MaxHeight="180"
+                    AutomationProperties.Name="Files waiting to be converted" />
+                <Button
+                    Content="Clear list"
+                    Click="OnClearPending"
+                    AutomationProperties.Name="Clear the waiting files"
+                    AutomationProperties.HelpText="Removes the files from this list. Nothing is deleted from your PC." />
+            </StackPanel>
+
+            <StackPanel x:Name="TargetSection" Spacing="4" Visibility="Collapsed">
+                <TextBlock Text="Convert to" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <VariableSizedWrapGrid
+                    x:Name="TargetButtons"
+                    Orientation="Horizontal"
+                    ItemWidth="112"
+                    ItemHeight="40"
+                    AutomationProperties.Name="Formats to convert to" />
+            </StackPanel>
+
+            <StackPanel x:Name="ResultSection" Spacing="4" Visibility="Collapsed">
+                <TextBlock Text="Results" Style="{ThemeResource BodyStrongTextBlockStyle}" />
+                <StackPanel x:Name="ResultList" Spacing="8" AutomationProperties.Name="Converted files" />
+                <Button
+                    Content="Clear results"
+                    Click="OnClearResults"
+                    AutomationProperties.Name="Clear the results"
+                    AutomationProperties.HelpText="Removes the results from this list. The converted files stay in the Ameya folder in Downloads." />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
