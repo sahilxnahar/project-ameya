@@ -32,6 +32,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
     private var closeMonitors: [Any] = []
     private var resignObserver: NSObjectProtocol?
     private var activeObserver: NSObjectProtocol?
+    private var panelShownAt = Date.distantPast
 
     /// Opens the big window. Set by the app delegate.
     var openWindow: () -> Void = {}
@@ -142,6 +143,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         Self.activateApp()
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            panelShownAt = Date()
             watchForOutsideClicks()
         }
         popover.contentViewController?.view.window?.makeKey()
@@ -215,7 +217,12 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.closePanel(reason: "Ameya lost focus") }
+            MainActor.assumeIsolated {
+                // Activation can bounce while the panel opens (at launch, after a shortcut);
+                // only a later loss of focus closes it. Clicks elsewhere still do.
+                guard let self, Date().timeIntervalSince(self.panelShownAt) > 0.6 else { return }
+                self.closePanel(reason: "Ameya lost focus")
+            }
         }
         // Activation finishes after `show`; then give the panel the keyboard (Escape, typing).
         activeObserver = NotificationCenter.default.addObserver(

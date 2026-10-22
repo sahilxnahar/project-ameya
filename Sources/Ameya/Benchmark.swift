@@ -66,6 +66,9 @@ enum Benchmark {
         let total = ms(since: clock)
         let done = jobs.filter { if case .done = $0.state { true } else { false } }.count
         print("BENCH 50 × 1600×1000 PNG → JPEG: \(fmt(total)) ms total, \(fmt(total / 50)) ms per file, \(done)/50 done")
+        for job in jobs where !job.state.isFinished || job.outcome == .failed {
+            print("BENCH not done: \(job.sources[0].lastPathComponent): \(job.state)")
+        }
         print("BENCH memory after 50 files: \(Memory.summary)")
         store.clearFinished()
         try? await Task.sleep(for: .milliseconds(500))
@@ -76,7 +79,7 @@ enum Benchmark {
     }
 
     private static func wait(for jobs: [Job]) async {
-        for _ in 0..<6000 where !jobs.allSatisfy({ $0.state.isFinished }) {
+        for _ in 0..<30000 where !jobs.allSatisfy({ $0.state.isFinished }) {
             try? await Task.sleep(for: .milliseconds(2))
         }
     }
