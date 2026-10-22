@@ -25,6 +25,9 @@ BIN=$(swift build -c release $ARCH_FLAGS --show-bin-path)
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
+# The app icon and the menu bar logo (rendered from Resources/Brand by scripts/render-brand.sh).
+cp "$ROOT/Resources/AppIcon.icns" "$ROOT/Resources/Brand/MenuBarLogo.png" "$ROOT/Resources/Brand/MenuBarLogo@2x.png" \
+    "$APP/Contents/Resources/"
 cp "$BIN/Ameya" "$APP/Contents/MacOS/Ameya"
 cp "$BIN/AmeyaWorker" "$APP/Contents/MacOS/AmeyaWorker"
 # The LGPL FFmpeg helper (scripts/build-ffmpeg.sh). Without it, Ogg/Opus/MP3-out/MKV/WebM/AVI aren't offered.

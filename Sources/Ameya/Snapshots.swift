@@ -39,6 +39,11 @@ enum Snapshots {
 
         store.add(files)
         ok = await render(main(), "files-added", size: CGSize(width: 560, height: 760), in: folder) && ok
+        // The menu bar panel (MenuBar/), with the same files waiting.
+        let panel = MenuBarPanel().environmentObject(store).environmentObject(results).environmentObject(MenuBarModel())
+        ok = await render(panel, "menubar-panel", size: MenuBarPanel.size, in: folder) && ok
+        ok = await render(panel, "menubar-panel-dark", size: MenuBarPanel.size, dark: true, in: folder) && ok
+        ok = await renderMenuBarExtras(store: store, results: results, in: folder) && ok // SnapshotsMenuBar.swift
 
         let jobs = store.convertNow(files, to: .jpeg, in: output)
         store.clearPending()
@@ -50,7 +55,7 @@ enum Snapshots {
         return ok
     }
 
-    private static func render(_ view: some View, _ name: String, size: CGSize, dark: Bool = false, in folder: URL) async -> Bool {
+    static func render(_ view: some View, _ name: String, size: CGSize, dark: Bool = false, in folder: URL) async -> Bool {
         // A real window paints its own background; offscreen, the root view has to.
         let root = view
             .frame(width: size.width, height: size.height, alignment: .top)

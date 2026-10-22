@@ -91,6 +91,15 @@ public struct WheelStateMachine: Sendable, Equatable {
                 state = .suppressed
                 return hide
             }
+            if settings.activation == .atDragStart {
+                // Only drags that start with the keys held get a wheel; others are left alone.
+                guard let ring = settings.mapping.ring(for: snapshot.modifiers) else {
+                    state = .suppressed
+                    return hide
+                }
+                state = .showing(ring, hovered: nil)
+                return hide + [.show(ring)]
+            }
             state = .dragging
             return hide + handle(.modifiersChanged(snapshot.modifiers))
 

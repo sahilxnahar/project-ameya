@@ -278,6 +278,21 @@ final class JobStore: ObservableObject {
         release(job)
         finished.send(job)
         startQueuedJobs()
+        trimFinished()
+    }
+
+    /// Ameya stays open in the menu bar for days; keep only the newest finished rows in memory.
+    /// (Older results are still listed under Recent.)
+    static let maxFinishedKept = 100
+
+    private func trimFinished() {
+        var kept = 0
+        let trimmed = jobs.filter { job in
+            guard job.state.isFinished else { return true }
+            kept += 1
+            return kept <= Self.maxFinishedKept
+        }
+        if trimmed.count != jobs.count { jobs = trimmed }
     }
 
     private func release(_ job: Job) {

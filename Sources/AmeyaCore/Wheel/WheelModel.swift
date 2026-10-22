@@ -29,8 +29,9 @@ public enum WheelRing: String, CaseIterable, Sendable, Codable {
 }
 
 /// A modifier key the user can hold while dragging. Independent of AppKit so it can be tested.
-public enum WheelModifier: String, CaseIterable, Sendable, Codable {
-    case shift, command, control, option
+public enum WheelModifier: String, CaseIterable, Sendable, Codable, Comparable {
+    // Declared in the order macOS writes them: ⌃ ⌥ ⇧ ⌘, then Fn (Globe).
+    case control, option, shift, command, function
 
     public var symbol: String {
         switch self {
@@ -38,6 +39,7 @@ public enum WheelModifier: String, CaseIterable, Sendable, Codable {
         case .command: "⌘"
         case .control: "⌃"
         case .option: "⌥"
+        case .function: "fn"
         }
     }
 
@@ -47,44 +49,12 @@ public enum WheelModifier: String, CaseIterable, Sendable, Codable {
         case .command: "Command"
         case .control: "Control"
         case .option: "Option"
+        case .function: "Fn (Globe)"
         }
     }
-}
 
-/// Which key opens which wheel. Each key opens at most one wheel; a wheel may have no key.
-public struct WheelModifierMapping: Sendable, Equatable, Codable {
-    public private(set) var keys: [WheelRing: WheelModifier]
-
-    public static let standard = WheelModifierMapping(keys: [.convert: .shift, .tools: .command, .actions: .control])
-
-    public init(keys: [WheelRing: WheelModifier]) {
-        // Drop duplicates, keeping the first ring (in display order) that claimed a key.
-        var used: Set<WheelModifier> = []
-        var clean: [WheelRing: WheelModifier] = [:]
-        for ring in WheelRing.allCases {
-            if let key = keys[ring], used.insert(key).inserted { clean[ring] = key }
-        }
-        self.keys = clean
-    }
-
-    public func key(for ring: WheelRing) -> WheelModifier? { keys[ring] }
-
-    /// Gives `ring` the key `modifier`. If another wheel had that key, the two wheels swap keys,
-    /// so a choice in Settings never silently disables another wheel.
-    public func assigning(_ modifier: WheelModifier?, to ring: WheelRing) -> WheelModifierMapping {
-        var keys = self.keys
-        let previous = keys[ring]
-        if let modifier, let other = keys.first(where: { $0.value == modifier && $0.key != ring })?.key {
-            keys[other] = previous
-        }
-        keys[ring] = modifier
-        return WheelModifierMapping(keys: keys)
-    }
-
-    /// The wheel for the keys currently held, or `nil` if none of them opens a wheel.
-    /// When several are held, the first wheel in display order wins (Convert, Tools, Actions).
-    public func ring(for held: Set<WheelModifier>) -> WheelRing? {
-        WheelRing.allCases.first { ring in keys[ring].map(held.contains) ?? false }
+    public static func < (lhs: Self, rhs: Self) -> Bool {
+        allCases.firstIndex(of: lhs)! < allCases.firstIndex(of: rhs)!
     }
 }
 
@@ -109,56 +79,6 @@ public struct WheelExclusions: Sendable, Equatable {
 
     public func removing(_ bundleID: String) -> WheelExclusions {
         WheelExclusions(bundleIDs.filter { $0.lowercased() != bundleID.lowercased() })
-    }
-}
-
-/// Everything the wheel reads from Settings, with the UserDefaults keys it is stored under.
-public struct WheelSettings: Sendable, Equatable {
-    public static let enabledKey = "wheel.enabled"
-    public static let sizeKey = "wheel.size"
-    public static let excludedKey = "wheel.excludedApps"
-    public static func keyKey(_ ring: WheelRing) -> String { "wheel.key.\(ring.rawValue)" }
-    /// Stored for a wheel deliberately set to "No key".
-    public static let noKey = "none"
-
-    public var isEnabled: Bool
-    public var mapping: WheelModifierMapping
-    public var size: WheelSize
-    public var exclusions: WheelExclusions
-
-    public init(isEnabled: Bool = true, mapping: WheelModifierMapping = .standard,
-                size: WheelSize = .medium, exclusions: WheelExclusions = WheelExclusions()) {
-        self.isEnabled = isEnabled
-        self.mapping = mapping
-        self.size = size
-        self.exclusions = exclusions
-    }
-
-    /// Reads settings, falling back to the defaults (wheel on, ⇧ ⌘ ⌃, medium) for anything unset.
-    public static func load(from defaults: UserDefaults) -> WheelSettings {
-        var keys: [WheelRing: WheelModifier] = [:]
-        for ring in WheelRing.allCases {
-            switch defaults.string(forKey: keyKey(ring)) {
-            case nil: keys[ring] = WheelModifierMapping.standard.key(for: ring)
-            case noKey?: break
-            case let raw?: keys[ring] = WheelModifier(rawValue: raw)
-            }
-        }
-        return WheelSettings(
-            isEnabled: defaults.object(forKey: enabledKey) as? Bool ?? true,
-            mapping: WheelModifierMapping(keys: keys),
-            size: defaults.string(forKey: sizeKey).flatMap(WheelSize.init(rawValue:)) ?? .medium,
-            exclusions: WheelExclusions(defaults.stringArray(forKey: excludedKey) ?? [])
-        )
-    }
-
-    public func save(to defaults: UserDefaults) {
-        defaults.set(isEnabled, forKey: Self.enabledKey)
-        defaults.set(size.rawValue, forKey: Self.sizeKey)
-        defaults.set(exclusions.bundleIDs, forKey: Self.excludedKey)
-        for ring in WheelRing.allCases {
-            defaults.set(mapping.key(for: ring)?.rawValue ?? Self.noKey, forKey: Self.keyKey(ring))
-        }
     }
 }
 

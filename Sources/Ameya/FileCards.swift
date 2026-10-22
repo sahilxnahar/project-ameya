@@ -132,11 +132,26 @@ struct PendingFileCard: View {
 
 /// Thumbnails from Quick Look, made on this Mac.
 enum Thumbnails {
+    /// Small and bounded, so reopening the menu bar panel doesn't redo Quick Look's work and
+    /// a big batch can't grow memory without limit. The system may also empty it under pressure.
+    private nonisolated(unsafe) static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 64
+        cache.totalCostLimit = 8 << 20
+        return cache
+    }()
+
     static func image(for url: URL, size: CGFloat) async -> NSImage? {
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        let key = "\(url.path)|\(size)|\(modified?.timeIntervalSince1970 ?? 0)" as NSString
+        if let cached = cache.object(forKey: key) { return cached }
         let scale = await MainActor.run { NSScreen.main?.backingScaleFactor ?? 2 }
         let request = QLThumbnailGenerator.Request(fileAt: url, size: CGSize(width: size, height: size),
                                                    scale: scale, representationTypes: .all)
         let representation = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
-        return representation?.nsImage
+        guard let image = representation?.nsImage else { return nil }
+        let pixels = Int(size * scale) * Int(size * scale) * 4
+        cache.setObject(image, forKey: key, cost: pixels)
+        return image
     }
 }

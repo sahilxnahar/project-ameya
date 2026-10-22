@@ -11,89 +11,36 @@ if CommandLine.arguments.contains("--snapshots") {
     exit(await Snapshots.run() ? 0 : 1)
 }
 
+// `Ameya --bench` measures setup, drop → job start, worker overhead and memory, then exits.
+if CommandLine.arguments.contains("--bench") {
+    exit(await Benchmark.run() ? 0 : 1)
+}
+
 AmeyaApp.main()
 
+/// A menu bar app (`LSUIElement`): the status item, its panel and the windows are AppKit
+/// (MenuBar/), made by `AppDelegate`. SwiftUI provides the menu bar commands and the views.
 struct AmeyaApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     var body: some Scene {
-        Window("Ameya", id: "main") {
-            MainView()
-                .environmentObject(delegate.store)
-                .environmentObject(delegate.results)
-                .background(WindowOpenerCapture())
+        // Ameya's own status item, panel and windows are AppKit (MenuBar/). SwiftUI needs a scene,
+        // so this one is never inserted: it only carries the menu commands. (A SwiftUI Settings
+        // scene would pop up its own window when the app activates, and can't be opened from
+        // AppKit on macOS 14; Settings open in `AppDelegate.showSettings()` instead.)
+        MenuBarExtra("Ameya", isInserted: .constant(false)) {
+            EmptyView()
         }
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 560, height: 640)
-
-        MenuBarExtra("Ameya", systemImage: "arrow.triangle.2.circlepath") {
-            MenuBarContent()
-                .environmentObject(delegate.store)
-                .environmentObject(delegate.results)
-        }
-
-        Settings {
-            SettingsView()
-        }
-    }
-}
-
-/// The menu bar menu. Every item is plain text, so VoiceOver reads it as written.
-struct MenuBarContent: View {
-    @EnvironmentObject private var store: JobStore
-    @EnvironmentObject private var results: ResultsModel
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Button("Open Ameya") {
-            openWindow(id: "main")
-            NSApp.activate()
-        }
-        .keyboardShortcut("o")
-        .onAppear { AppDelegate.shared?.openMainWindow = { openWindow(id: "main") } }
-        Button("Convert Clipboard…") { ClipboardActions.convertClipboard() }
-            .keyboardShortcut("v")
-        Menu("Copy Clipboard Picture As") {
-            Button("JPEG") { ClipboardActions.copy(as: .jpeg) }
-            Button("PNG") { ClipboardActions.copy(as: .png) }
-            Button("PDF") { ClipboardActions.copy(as: .pdf) }
-        }
-        WheelMenuItems()
-        Divider()
-        Menu("Recent") {
-            let recent = results.recent.items.prefix(8)
-            if recent.isEmpty {
-                Text("Nothing yet")
-            } else {
-                ForEach(Array(recent)) { file in
-                    Button(file.name) { NSWorkspace.shared.open(file.url) }
-                        .disabled(!results.exists(file))
-                }
-                Divider()
-                Button("Clear Recent") { results.clearRecent() }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { AppDelegate.shared?.showSettings() }
+                    .keyboardShortcut(",")
+            }
+            CommandGroup(replacing: .newItem) {
+                Button("New Ameya Window") { AppDelegate.shared?.showMainWindow() }
+                    .keyboardShortcut("n")
+                Button("Open Menu Bar Panel") { AppDelegate.shared?.showPanel() }
             }
         }
-        Button("Show Converted Files") {
-            try? FileManager.default.createDirectory(at: store.outputDirectory, withIntermediateDirectories: true)
-            NSWorkspace.shared.open(store.outputDirectory)
-        }
-        Divider()
-        Button("Welcome Tour…") { AppDelegate.shared?.showWelcomeTour() }
-        SettingsLink { Text("Settings…") }
-            .keyboardShortcut(",")
-        Divider()
-        Button("Quit Ameya") { NSApp.terminate(nil) }
-            .keyboardShortcut("q")
-    }
-}
-
-/// Lets AppKit code reopen the main window after the user closed it.
-private struct WindowOpenerCapture: View {
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Color.clear
-            .accessibilityHidden(true)
-            .onAppear { AppDelegate.shared?.openMainWindow = { openWindow(id: "main") } }
     }
 }

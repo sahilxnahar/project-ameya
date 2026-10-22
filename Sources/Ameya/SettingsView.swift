@@ -48,7 +48,7 @@ struct SettingsView: View {
             }
             .onChange(of: autoConvert) { _, _ in AppDelegate.shared?.autoConverter.applySettings() }
 
-            WheelSettingsSection()
+            // The drag wheel and shortcuts: Keyboard & Mouse tab. The menu bar: Menu tab (Settings/).
             Section("Fun") {
                 Toggle("Celebrate finished batches", isOn: $celebrate)
                     .disabled(reduceMotion)
