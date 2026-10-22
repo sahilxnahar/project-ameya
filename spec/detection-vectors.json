@@ -69,7 +69,7 @@
     {"fileName":"old.xls","hex":"d0cf11e0a1b11ae1","name":"XLS is not offered"},
     {"expected":"md","fileName":"notes.md","hex":"23205469746c650a0a546578740a","name":"Markdown"},
     {"expected":"txt","fileName":"readme.txt","hex":"68656c6c6f20776f726c640a","name":"Plain text"},
-    {"expected":"mp3","fileName":"u16.txt","hex":"fffe680065006c006c006f00","name":"UTF-16 text with BOM"},
+    {"expected":"txt","fileName":"u16.txt","hex":"fffe680065006c006c006f00","name":"UTF-16 text with BOM"},
     {"expected":"csv","fileName":"u16.csv","hex":"61002c0062000a0031002c0032000a00","name":"UTF-16 CSV without BOM"},
     {"fileName":"bin.txt","hex":"000102","name":"Binary named .txt"},
     {"fileName":"notes","hex":"68656c6c6f20776f726c64","name":"Unknown text"},

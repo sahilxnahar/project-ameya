@@ -79,9 +79,9 @@ public static partial class FormatDetection
 
         // Audio
         if (StartsText("ID3")) return "mp3";
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0 && (bytes[1] & 0x06) != 0)
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0 && ((bytes[1] >> 1) & 0x03) is 1 or 2)
         {
-            return "mp3"; // MPEG audio frame sync with a non-zero layer (ADTS AAC has layer 0)
+            return "mp3"; // MPEG frame sync, Layer III or II only: AAC has layer 0; Layer I would claim the UTF-16 BOM (FF FE)
         }
         if (StartsText("RIFF") && StartsText("WAVE", 8)) return "wav";
         if (StartsText("FORM") && (StartsText("AIFF", 8) || StartsText("AIFC", 8))) return "aiff";

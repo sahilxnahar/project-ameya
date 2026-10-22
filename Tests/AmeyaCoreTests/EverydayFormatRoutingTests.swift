@@ -32,6 +32,15 @@ struct EverydayFormatRoutingTests {
         #expect(FileFormat.detect(header: Data([0, 0, 0, 1, 0, 0, 2]), fileExtension: "txt") == nil)
     }
 
+    @Test func utf16ByteOrderMarkIsTextNotMP3() {
+        let bom = Data([0xFF, 0xFE]) + "hello".data(using: .utf16LittleEndian)!
+        #expect(FileFormat.detect(header: bom, fileExtension: "txt") == .txt)
+        #expect(FileFormat.detect(header: bom, fileExtension: "csv") == .csv)
+        // Real MPEG frames still sniff as MP3: Layer III (FF FB) and Layer II (FF FD).
+        #expect(FileFormat.sniff(Data([0xFF, 0xFB, 0x90, 0x64])) == .mp3)
+        #expect(FileFormat.sniff(Data([0xFF, 0xFD, 0x90, 0x64])) == .mp3)
+    }
+
     @Test func routes() {
         let yes: [(FileFormat, FileFormat)] = [
             (.txt, .png), (.png, .txt), (.jpeg, .txt), (.heic, .txt), (.vcf, .csv), (.vcf, .json), (.csv, .vcf),

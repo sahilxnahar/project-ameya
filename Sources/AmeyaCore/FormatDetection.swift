@@ -152,8 +152,10 @@ extension FileFormat {
 
         // Audio
         if starts("ID3") { return .mp3 }
-        if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] & 0xE0 == 0xE0, bytes[1] & 0x06 != 0 {
-            return .mp3 // MPEG audio frame sync with a non-zero layer (ADTS AAC has layer 0)
+        if bytes.count >= 2, bytes[0] == 0xFF, bytes[1] & 0xE0 == 0xE0, [1, 2].contains((bytes[1] >> 1) & 0x03) {
+            // MPEG frame sync, Layer III or II only: ADTS AAC has layer 0, and Layer I (FF FE/FF FF)
+            // would claim the UTF-16 byte-order mark.
+            return .mp3
         }
         if starts("RIFF") && starts("WAVE", at: 8) { return .wav }
         if starts("FORM") && (starts("AIFF", at: 8) || starts("AIFC", at: 8)) { return .aiff }
