@@ -15,7 +15,7 @@ renamed **Project Ameya**). No code from Open Tangerine was used.
   downloads, model downloads or web fetching. Enforced by `Tests/AmeyaCoreTests/LocalOnlyTests.swift`
   (no network entitlements, no networking APIs). Network-dependent features are "not planned".
 - **Easy, accessible and fun.** One obvious action, plain words; full keyboard + VoiceOver; respects
-  Reduce Motion / Transparency / Increase Contrast; tasteful delight (tangerine accent, celebrations).
+  Reduce Motion / Transparency / Increase Contrast; tasteful delight (Ameya gold accent, celebrations).
 - **Menu-bar-first** on Mac (and tray-first on Windows), fast and light when idle.
 - **Open source, MPL-2.0.** Permissive dependencies only; LGPL only as a separate process (FFmpeg);
   never GPL/AGPL. Satsuma (MIT) may be reused with credit; Open Tangerine (GPL) may not.

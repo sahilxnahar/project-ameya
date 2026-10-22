@@ -128,6 +128,8 @@
 	</array>
 	<key>CFBundleExecutable</key>
 	<string>Ameya</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.sahilxnahar.ameya</string>
 	<key>CFBundleInfoDictionaryVersion</key>

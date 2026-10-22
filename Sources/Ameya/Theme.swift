@@ -2,19 +2,27 @@ import AmeyaCore
 import AppKit
 import SwiftUI
 
-/// Ameya's look: one warm accent, SF Symbols in hierarchical rendering, gentle springs.
+/// Ameya's look: one gold accent, SF Symbols in hierarchical rendering, gentle springs.
 enum Theme {
-    /// Tangerine. Dark enough for white button text in light mode, bright enough on dark backgrounds.
+    /// Ameya gold, from the brand mark (#C9A95D), tuned per appearance for contrast:
+    /// - light: #7D5F1A — white button text 6.0:1, as text on window background 5.0:1
+    /// - light, Increase Contrast: #5E4612 — 8.9:1 / 7.5:1
+    /// - dark: #A8873A — white button text 3.4:1 (bold control labels), as text on dark 4.9:1
+    /// - dark, Increase Contrast: #AF8E44 — as text on dark 5.4:1, white button text 3.1:1
+    ///   (Increase Contrast also strengthens card borders; see `CardBackground`)
     static let accent = Color(nsColor: NSColor(name: "AmeyaAccent") { appearance in
         let dark = appearance.bestMatch(from: [.darkAqua, .accessibilityHighContrastDarkAqua]) != nil
         let highContrast = appearance.bestMatch(from: [.accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua]) != nil
         switch (dark, highContrast) {
-        case (false, false): return NSColor(srgbRed: 0.76, green: 0.30, blue: 0.10, alpha: 1)
-        case (false, true): return NSColor(srgbRed: 0.62, green: 0.22, blue: 0.05, alpha: 1)
-        case (true, false): return NSColor(srgbRed: 0.90, green: 0.42, blue: 0.17, alpha: 1)
-        case (true, true): return NSColor(srgbRed: 0.98, green: 0.56, blue: 0.30, alpha: 1)
+        case (false, false): return NSColor(srgbRed: 0x7D / 255, green: 0x5F / 255, blue: 0x1A / 255, alpha: 1)
+        case (false, true): return NSColor(srgbRed: 0x5E / 255, green: 0x46 / 255, blue: 0x12 / 255, alpha: 1)
+        case (true, false): return NSColor(srgbRed: 0xA8 / 255, green: 0x87 / 255, blue: 0x3A / 255, alpha: 1)
+        case (true, true): return NSColor(srgbRed: 0xAF / 255, green: 0x8E / 255, blue: 0x44 / 255, alpha: 1)
         }
     })
+
+    /// The brand gold itself, for decoration only (the mark, confetti), never for text.
+    static let brandGold = Color(red: 0xC9 / 255, green: 0xA9 / 255, blue: 0x5D / 255)
 
     static let cornerRadius: CGFloat = 12
 

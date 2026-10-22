@@ -37,6 +37,34 @@ struct WheelChoice: Identifiable, Equatable {
 /// menu bar's "Files in Ameya" menu (`WheelMenuItems`).
 @MainActor
 enum WheelChoices {
+    /// The wedges for `ring`. `chosen` (Settings → Keyboard & Mouse) lists wedge ids in the
+    /// user's order; those that suit the files are used, else Ameya picks as usual.
+    static func make(_ ring: WheelRing, formats: [FileFormat], store: JobStore, chosen: [String]?) -> [WheelChoice] {
+        let automatic = make(ring, formats: formats, store: store)
+        guard let chosen, !chosen.isEmpty else { return automatic }
+        let all = allChoices(ring, formats: formats, store: store)
+        let picked = chosen.compactMap { id in all.first { $0.id == id } }.prefix(WheelTargetRanker.maxWedges)
+        return picked.isEmpty ? automatic : Array(picked)
+    }
+
+    /// Every wedge `ring` could offer for these files, for Settings and for user-chosen wheels.
+    static func allChoices(_ ring: WheelRing, formats: [FileFormat], store: JobStore) -> [WheelChoice] {
+        let fileWord = formats.count == 1 ? "this file" : "these \(formats.count) files"
+        switch ring {
+        case .convert:
+            return store.matrix.commonTargets(for: formats).map { format in
+                WheelChoice(action: .convert(format), title: format.displayName, systemImage: symbol(for: format),
+                            help: "Saves a \(format.displayName) copy of \(fileWord).")
+            }
+        case .tools:
+            return store.catalog.available(for: formats).map { tool in
+                WheelChoice(action: .tool(id: tool.id), title: tool.title, systemImage: tool.systemImage, help: tool.help)
+            }
+        case .actions:
+            return make(.actions, formats: formats, store: store)
+        }
+    }
+
     static func make(_ ring: WheelRing, formats: [FileFormat], store: JobStore) -> [WheelChoice] {
         let fileWord = formats.count == 1 ? "this file" : "these \(formats.count) files"
         switch ring {

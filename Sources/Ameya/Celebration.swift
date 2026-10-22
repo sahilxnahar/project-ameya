@@ -39,7 +39,7 @@ struct ConfettiBurst: View {
         let hue = Int.random(in: 0..<5)
     }
 
-    private static let colors: [Color] = [Theme.accent, .yellow, .pink, .teal, .purple]
+    private static let colors: [Color] = [Theme.brandGold, Theme.accent, .yellow, .teal, .white.opacity(0.9)]
 
     var body: some View {
         TimelineView(.animation(paused: start == nil)) { timeline in

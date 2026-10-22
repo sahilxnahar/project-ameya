@@ -126,11 +126,13 @@ struct WheelView: View {
                 .multilineTextAlignment(.center)
             HStack(spacing: 5) {
                 ForEach(WheelRing.allCases, id: \.self) { ring in
-                    if let key = model.mapping.key(for: ring) {
-                        Text(key.symbol)
+                    if let key = model.mapping.trigger(for: ring) {
+                        Text(key.symbols)
                             .font(.system(size: 10, weight: .semibold))
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(ring == model.ring ? Color.accentColor.opacity(0.85)
+                            .fixedSize()
+                            .frame(minWidth: 16, minHeight: 16)
+                            .padding(.horizontal, key.modifiers.count > 1 ? 3 : 0)
+                            .background(Capsule().fill(ring == model.ring ? Color.accentColor.opacity(0.85)
                                                                          : Color.primary.opacity(0.08)))
                             .foregroundStyle(ring == model.ring ? Color.white : Color.secondary)
                             .accessibilityLabel("\(key.title): \(ring.title)")

@@ -2,29 +2,53 @@ import AmeyaCore
 import AppKit
 import SwiftUI
 
-/// Settings → "Drag wheel". Saved to UserDefaults; `WheelController` picks changes up at once.
+/// Settings → Keyboard & Mouse → "Drag wheel". Saved to UserDefaults; `WheelController` picks
+/// changes up at once. Every control is a standard, labelled control: Tab, Space and VoiceOver.
 struct WheelSettingsSection: View {
     @State private var settings = WheelSettings.load(from: .standard)
 
     var body: some View {
         Section("Drag wheel") {
-            Toggle("Show the wheel when I hold a key while dragging files", isOn: binding(\.isEnabled))
-                .accessibilityHint("While you drag files anywhere on the Mac, holding a key shows a wheel of things Ameya can do with them")
+            Toggle("Show the wheel when I hold keys while dragging files", isOn: binding(\.isEnabled))
+                .accessibilityHint("While you drag files anywhere on the Mac, holding keys shows a wheel of things Ameya can do with them")
 
             Group {
                 ForEach(WheelRing.allCases, id: \.self) { ring in
-                    Picker(ring.title, selection: keyBinding(for: ring)) {
-                        Text("No key").tag(WheelModifier?.none)
-                        ForEach(WheelModifier.allCases, id: \.self) { key in
-                            Text("\(key.symbol) \(key.title)").tag(WheelModifier?.some(key))
-                        }
+                    triggerRow(ring)
+                }
+                ForEach(Array(settings.mapping.conflicts.enumerated()), id: \.offset) { _, conflict in
+                    Label(conflict.message, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Picker("Keys count", selection: binding(\.activation)) {
+                    ForEach(WheelActivation.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.radioGroup)
+                .accessibilityHint("Choose whether pressing the keys during a drag opens the wheel, or only holding them as the drag starts")
+                LabeledContent("Delay before showing") {
+                    HStack {
+                        Slider(value: binding(\.showDelay), in: 0...WheelSettings.maxDelay, step: 0.1)
+                            .frame(width: 160)
+                            .accessibilityLabel("Delay before the wheel shows")
+                            .accessibilityValue(delayText)
+                        Text(delayText).monospacedDigit().frame(width: 64, alignment: .leading)
                     }
-                    .accessibilityLabel("Key for the \(ring.title) wheel")
                 }
                 Picker("Wheel size", selection: binding(\.size)) {
                     ForEach(WheelSize.allCases, id: \.self) { size in Text(size.title).tag(size) }
                 }
                 .pickerStyle(.segmented)
+
+                // Ids distinct from the key rows above, so SwiftUI doesn't mix the two lists up.
+                ForEach(WheelRing.allCases.map { "items.\($0.rawValue)" }, id: \.self) { id in
+                    let ring = WheelRing(rawValue: String(id.dropFirst(6)))!
+                    DisclosureGroup("What the \(ring.title) wheel shows") {
+                        OrderedItemsEditor(noun: "wedge", all: SettingsCatalog.wedges(ring), chosen: itemsBinding(ring),
+                                           emptyText: "Ameya picks the likeliest choices for the files you drag.")
+                            .padding(.vertical, 4)
+                    }
+                }
 
                 LabeledContent("Don't show the wheel in") {
                     VStack(alignment: .trailing, spacing: 6) {
@@ -46,15 +70,50 @@ struct WheelSettingsSection: View {
         }
     }
 
+    private var delayText: String {
+        settings.showDelay == 0 ? "None" : String(format: "%.1f s", settings.showDelay)
+    }
+
+    /// One toggle per key (⌃ ⌥ ⇧ ⌘ fn): any single key or combination, or none for "off".
+    private func triggerRow(_ ring: WheelRing) -> some View {
+        let trigger = settings.mapping.trigger(for: ring)
+        return LabeledContent {
+            HStack(spacing: 4) {
+                ForEach(WheelModifier.allCases, id: \.self) { key in
+                    let isOn = trigger?.modifiers.contains(key) ?? false
+                    let button = Button {
+                        var keys = trigger?.modifiers ?? []
+                        if isOn { keys.remove(key) } else { keys.insert(key) }
+                        settings.mapping = settings.mapping.assigning(trigger: WheelTrigger(keys), to: ring)
+                        save()
+                    } label: {
+                        Text(key.symbol).frame(minWidth: 18)
+                    }
+                    .help(key.title)
+                    .accessibilityLabel("\(key.title) for the \(ring.title) wheel")
+                    .accessibilityValue(isOn ? "on" : "off")
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                    // On: filled gold. Off: plain. Shape and fill differ, not only colour.
+                    if isOn { button.buttonStyle(.borderedProminent) } else { button.buttonStyle(.bordered) }
+                }
+                Text(trigger.map { "= \($0.symbols)" } ?? "Off")
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 52, alignment: .leading)
+                    .accessibilityHidden(true)
+            }
+        } label: {
+            Text(ring.title)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Keys for the \(ring.title) wheel: \(trigger?.title ?? "off")")
+    }
+
     private func binding<Value>(_ keyPath: WritableKeyPath<WheelSettings, Value>) -> Binding<Value> {
         Binding(get: { settings[keyPath: keyPath] }, set: { settings[keyPath: keyPath] = $0; save() })
     }
 
-    private func keyBinding(for ring: WheelRing) -> Binding<WheelModifier?> {
-        Binding(get: { settings.mapping.key(for: ring) }, set: { key in
-            settings.mapping = settings.mapping.assigning(key, to: ring)
-            save()
-        })
+    private func itemsBinding(_ ring: WheelRing) -> Binding<[String]> {
+        Binding(get: { settings.items[ring] ?? [] }, set: { settings.items[ring] = $0.isEmpty ? nil : $0; save() })
     }
 
     private func save() {

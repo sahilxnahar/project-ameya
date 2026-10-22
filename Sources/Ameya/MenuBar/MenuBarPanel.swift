@@ -27,12 +27,27 @@ struct MenuBarPanel: View {
     @EnvironmentObject private var results: ResultsModel
     @EnvironmentObject private var model: MenuBarModel
     @AppStorage(QuickConvert.key) private var quickConvert = true
+    @AppStorage(PanelPreferences.densityKey) private var density = PanelDensity.comfortable.rawValue
+    @AppStorage(PanelPreferences.largerTextKey) private var largerText = false
+    @AppStorage(PanelPreferences.sectionKey(.favourites)) private var showFavourites = true
+    @AppStorage(PanelPreferences.sectionKey(.convert)) private var showConvert = true
+    @AppStorage(PanelPreferences.sectionKey(.tools)) private var showTools = true
+    @AppStorage(PanelPreferences.sectionKey(.results)) private var showResults = true
+    @AppStorage(PanelPreferences.sectionKey(.recent)) private var showRecent = true
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var panelTool: Tool?
     @State private var preview: URL?
 
     static let size = CGSize(width: 380, height: 560)
+    /// "Larger text" makes the whole panel bigger rather than squeezing big text into it.
+    static var currentSize: CGSize {
+        PanelPreferences.largerText ? CGSize(width: size.width * textScale, height: size.height * textScale) : size
+    }
+    /// macOS doesn't scale fixed text styles with Dynamic Type, so "Larger text" lays the panel
+    /// out at its usual size and magnifies all of it. Text and symbols are vector, so they stay sharp.
+    static let textScale: CGFloat = 1.25
+    private var isCompact: Bool { density == PanelDensity.compact.rawValue }
     private static let maxTools = 4
     private static let maxCards = 4
 
@@ -41,7 +56,7 @@ struct MenuBarPanel: View {
             header
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: isCompact ? 10 : 16) {
                     if let tool = panelTool {
                         ToolPanelSheet(tool: tool, formats: store.pending.map(\.format)) { options in
                             panelTool = nil
@@ -52,13 +67,16 @@ struct MenuBarPanel: View {
                         content
                     }
                 }
-                .padding(14)
+                .padding(isCompact ? 10 : 14)
                 .animation(Theme.arrival(reduceMotion: reduceMotion), value: store.pending.map(\.id))
             }
             Divider()
             footer
         }
         .frame(width: Self.size.width, height: Self.size.height)
+        .controlSize(isCompact ? .small : .regular)
+        .scaleEffect(largerText ? Self.textScale : 1, anchor: .topLeading)
+        .frame(width: Self.currentSize.width, height: Self.currentSize.height, alignment: .topLeading)
         .tint(Theme.accent)
         .overlay { if model.isDropTargeted { dropOverlay } }
         .dropDestination(for: URL.self) { urls, _ in
@@ -76,7 +94,7 @@ struct MenuBarPanel: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Image(nsImage: StatusIcon.image(.finished))
+            Image(nsImage: StatusIcon.image(.idle))
                 .renderingMode(.template)
                 .foregroundStyle(Theme.accent)
                 .accessibilityHidden(true)
@@ -108,8 +126,8 @@ struct MenuBarPanel: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        if !store.jobs.isEmpty { ResultsSection(preview: $preview) }
-        if !results.olderRecent(than: store.jobs).isEmpty { RecentSection(preview: $preview) }
+        if showResults, !store.jobs.isEmpty { ResultsSection(preview: $preview) }
+        if showRecent, !results.olderRecent(than: store.jobs).isEmpty { RecentSection(preview: $preview) }
     }
 
     private var dropHint: some View {
@@ -178,10 +196,11 @@ struct MenuBarPanel: View {
                   systemImage: "arrow.triangle.branch")
                 .foregroundStyle(.secondary)
         }
-        if !targets.isEmpty {
+        if showFavourites { favourites }
+        if showConvert, !targets.isEmpty {
             ConvertToSection(choices: targets, notes: store.possibleLosses(to:)) { store.convert(to: $0) }
         }
-        if !tools.isEmpty {
+        if showTools, !tools.isEmpty {
             ToolsSection(tools: Array(tools.prefix(Self.maxTools))) { tool in
                 if tool.panel != nil { panelTool = tool } else { store.run(tool) }
             }
@@ -190,6 +209,43 @@ struct MenuBarPanel: View {
                     .buttonStyle(.borderless)
                     .accessibilityHint("Opens the big window with these files ready.")
             }
+        }
+    }
+
+    /// Settings → Menu → Favourites: pinned formats and tools that suit the waiting files.
+    @ViewBuilder private var favourites: some View {
+        let targets = Set(store.targets)
+        let tools = store.tools
+        let items = PanelPreferences.favourites.compactMap { PanelItem.find($0, store: store) }.filter { item in
+            switch item.kind {
+            case let .format(format): targets.contains(format)
+            case let .tool(id): tools.contains { $0.id == id }
+            }
+        }
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionTitle(text: "Favourites", systemImage: "star")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 6)], alignment: .leading, spacing: 6) {
+                    ForEach(items) { item in
+                        Button { runFavourite(item, tools: tools) } label: {
+                            Label(item.title, systemImage: item.systemImage)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityLabel(item.title.hasPrefix("Convert") || item.kind.isTool ? item.title : "Convert to \(item.title)")
+                        .accessibilityHint("A favourite. Change favourites in Settings › Menu.")
+                    }
+                }
+            }
+        }
+    }
+
+    private func runFavourite(_ item: PanelItem, tools: [Tool]) {
+        switch item.kind {
+        case let .format(format): store.convert(to: format)
+        case let .tool(id):
+            guard let tool = tools.first(where: { $0.id == id }) else { return }
+            if tool.panel != nil { panelTool = tool } else { store.run(tool) }
         }
     }
 

@@ -13,10 +13,10 @@ private let menuBarLog = Logger(subsystem: "io.github.sahilxnahar.ameya", catego
 /// opens and let go when it closes.
 @MainActor
 final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
-    private let store: JobStore
-    private let results: ResultsModel
+    let store: JobStore
+    let results: ResultsModel
     private let model = MenuBarModel()
-    private let statusItem: NSStatusItem
+    let statusItem: NSStatusItem
     private var popover: NSPopover?
     private var dropView: StatusDropView?
     private var jobsSubscription: AnyCancellable?
@@ -26,6 +26,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
     private var unseenFinished = 0
     private var showFinishedUntil: Date?
     private var look: StatusIcon.Look = .idle
+    private var iconStyle = PanelPreferences.iconStyle
+    private var defaultsObserver: NSObjectProtocol?
     /// Only while the panel is open: closes it on clicks elsewhere and when Ameya loses focus.
     private var closeMonitors: [Any] = []
     private var resignObserver: NSObjectProtocol?
@@ -52,7 +54,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
     private func configureButton() {
         guard let button = statusItem.button else { return }
-        button.image = StatusIcon.image(.idle)
+        button.image = StatusIcon.image(.idle, style: iconStyle)
         button.imagePosition = .imageLeading
         button.target = self
         button.action = #selector(buttonClicked(_:))
@@ -77,7 +79,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
 
     @objc private func buttonClicked(_ sender: NSStatusBarButton) {
         let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+        let secondary = event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true
+        // Settings → Menu can swap what a click and a right-click do.
+        if secondary == (PanelPreferences.click == .leftOpensPanel) {
             showMenu()
         } else {
             togglePanel()
@@ -95,6 +99,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         let readable = files.allSatisfy { FileManager.default.isReadableFile(atPath: $0.path) }
         menuBarLog.info("Dropped on the menu bar: \(files.count, privacy: .public) file(s), readable: \(readable, privacy: .public)")
         LaunchTiming.mark("menu bar drop received")
+        if let id = PanelPreferences.dropAction, runDropAction(id, on: files) { return }
         let before = store.pending.count
         store.add(files)
         let added = store.pending.count - before
@@ -129,7 +134,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         let started = ContinuousClock.now
         let popover = self.popover ?? makePopover()
         self.popover = popover
-        if popover.contentViewController == nil { popover.contentViewController = makeContent() }
+        if popover.contentViewController == nil {
+            popover.contentSize = MenuBarPanel.currentSize
+            popover.contentViewController = makeContent()
+        }
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         Self.activateApp()
         if !popover.isShown {
@@ -171,7 +179,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         // Closed by Ameya (`watchForOutsideClicks`) rather than by AppKit's "transient" rule,
         // which closes the panel at once whenever Ameya isn't the active app yet.
         popover.behavior = .applicationDefined
-        popover.contentSize = MenuBarPanel.size
+        popover.contentSize = MenuBarPanel.currentSize
         popover.delegate = self
         return popover
     }
@@ -183,7 +191,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
             .environmentObject(model)
         let controller = PanelHostingController(rootView: AnyView(root))
         controller.onCancel = { [weak self] in self?.closePanel() }
-        controller.preferredContentSize = MenuBarPanel.size
+        controller.preferredContentSize = MenuBarPanel.currentSize
         return controller
     }
 
@@ -249,9 +257,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         showPanel()
     }
 
-    // MARK: Right-click menu
+    // MARK: Right-click menu (StatusItemMenu.swift)
 
-    private func showMenu() {
+    func showMenu() {
         let menu = NSMenu()
         menu.delegate = self
         buildMenu(menu)
@@ -260,67 +268,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
     }
 
     func menuDidClose(_ menu: NSMenu) {
-        statusItem.menu = nil // Left clicks open the panel again.
-    }
-
-    private func buildMenu(_ menu: NSMenu) {
-        menu.addItem(item("Open Panel", key: "") { [weak self] in self?.showPanel() })
-        menu.addItem(item("Open Ameya Window", key: "n") { [weak self] in self?.openWindow() })
-        menu.addItem(.separator())
-        menu.addItem(item("Convert Clipboard…", key: "v") { ClipboardActions.convertClipboard() })
-        let copy = NSMenu()
-        for (title, format) in [("JPEG", FileFormat.jpeg), ("PNG", .png), ("PDF", .pdf)] {
-            copy.addItem(item(title, key: "") { ClipboardActions.copy(as: format) })
-        }
-        menu.addItem(submenu("Copy Clipboard Picture As", copy))
-        let files = NSMenu()
-        let pending = store.pending.map(\.url)
-        files.addItem(item("Copy Paths", key: "") { WheelChoices.copyPaths(pending) })
-        files.addItem(item("Show in Finder", key: "") { NSWorkspace.shared.activateFileViewerSelecting(pending) })
-        let filesItem = submenu("Files in Ameya", files)
-        filesItem.isEnabled = !pending.isEmpty
-        menu.addItem(filesItem)
-        menu.addItem(.separator())
-        menu.addItem(submenu("Recent", recentMenu()))
-        menu.addItem(item("Show Converted Files", key: "") { [store] in
-            try? FileManager.default.createDirectory(at: store.outputDirectory, withIntermediateDirectories: true)
-            NSWorkspace.shared.open(store.outputDirectory)
-        })
-        menu.addItem(.separator())
-        menu.addItem(item("Welcome Tour…", key: "") { AppDelegate.shared?.showWelcomeTour() })
-        menu.addItem(item("Settings…", key: ",") { [weak self] in self?.openSettings() })
-        menu.addItem(.separator())
-        menu.addItem(item("Quit Ameya", key: "q") { NSApp.terminate(nil) })
-    }
-
-    private func recentMenu() -> NSMenu {
-        let menu = NSMenu()
-        let recent = results.recent.items.prefix(8)
-        if recent.isEmpty {
-            let empty = NSMenuItem(title: "Nothing yet", action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            menu.addItem(empty)
-            return menu
-        }
-        for file in recent {
-            let entry = item(file.name, key: "") { NSWorkspace.shared.open(file.url) }
-            entry.isEnabled = results.exists(file)
-            menu.addItem(entry)
-        }
-        menu.addItem(.separator())
-        menu.addItem(item("Clear Recent", key: "") { [results] in results.clearRecent() })
-        return menu
-    }
-
-    private func item(_ title: String, key: String, _ action: @escaping () -> Void) -> NSMenuItem {
-        let item = ClosureMenuItem(title: title, keyEquivalent: key, action: action)
-        return item
-    }
-
-    private func submenu(_ title: String, _ menu: NSMenu) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        item.submenu = menu
-        return item
+        statusItem.menu = nil // Clicks go back to `buttonClicked`.
     }
 
     // MARK: Progress on the icon
@@ -330,8 +278,22 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
             // Runs before `jobs` changes; read the new value next turn.
             DispatchQueue.main.async { self?.watchRunning(jobs) }
         }
-        finishedSubscription = store.finished.sink { [weak self] _ in
+        finishedSubscription = store.finished.sink { [weak self] job in
+            // The last plain conversion's format, for the "convert again" shortcut.
+            if job.toolTitle == nil, case .done = job.state { PanelPreferences.lastTarget = job.target }
             DispatchQueue.main.async { self?.jobFinished() }
+        }
+        // The icon style can change in Settings at any time.
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.iconStyle != PanelPreferences.iconStyle else { return }
+                self.iconStyle = PanelPreferences.iconStyle
+                self.look = .idle
+                self.statusItem.button?.image = StatusIcon.image(.idle, style: self.iconStyle)
+                self.updateIcon()
+            }
         }
     }
 
@@ -382,7 +344,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, NSMenuDelegate {
         }
         if next != look {
             look = next
-            button.image = StatusIcon.image(next)
+            button.image = StatusIcon.image(next, style: iconStyle)
         }
         let count = active.isEmpty ? unseenFinished : 0
         let title = count > 0 ? "\(count)" : ""
@@ -413,20 +375,4 @@ private final class PanelHostingController: NSHostingController<AnyView> {
     override func cancelOperation(_ sender: Any?) {
         onCancel()
     }
-}
-
-/// A menu item that runs a closure.
-private final class ClosureMenuItem: NSMenuItem {
-    private let handler: () -> Void
-
-    init(title: String, keyEquivalent: String, action: @escaping () -> Void) {
-        handler = action
-        super.init(title: title, action: #selector(run), keyEquivalent: keyEquivalent)
-        target = self
-    }
-
-    @available(*, unavailable)
-    required init(coder: NSCoder) { fatalError("not used") }
-
-    @objc private func run() { handler() }
 }

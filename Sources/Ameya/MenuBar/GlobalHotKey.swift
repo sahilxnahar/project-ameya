@@ -7,7 +7,7 @@ private let hotKeyLog = Logger(subsystem: "io.github.sahilxnahar.ameya", categor
 /// A keyboard shortcut that works from any app: Carbon's `RegisterEventHotKey`, which needs no
 /// Accessibility permission and works in the sandbox. (A global `NSEvent` key monitor would
 /// need Accessibility permission and could only watch, not take, the keystroke.)
-struct HotKeyShortcut: Codable, Equatable {
+struct HotKeyShortcut: Codable, Equatable, Hashable {
     /// A virtual key code (`kVK_…`).
     var keyCode: UInt32
     /// Carbon modifier flags (`controlKey`, `optionKey`, `cmdKey`, `shiftKey`).
@@ -17,25 +17,16 @@ struct HotKeyShortcut: Codable, Equatable {
 
     static let standard = HotKeyShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey), keyName: "Space")
 
-    /// "⌃⌥Space".
-    var symbols: String {
-        var text = ""
-        if modifiers & UInt32(controlKey) != 0 { text += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { text += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { text += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { text += "⌘" }
-        return text + keyName
+    private var parts: [(UInt32, String, String)] {
+        [(UInt32(controlKey), "⌃", "Control"), (UInt32(optionKey), "⌥", "Option"),
+         (UInt32(shiftKey), "⇧", "Shift"), (UInt32(cmdKey), "⌘", "Command")]
+            .filter { modifiers & $0.0 != 0 }
     }
 
+    /// "⌃⌥Space".
+    var symbols: String { parts.map(\.1).joined() + keyName }
     /// "Control Option Space", for VoiceOver.
-    var spoken: String {
-        var words: [String] = []
-        if modifiers & UInt32(controlKey) != 0 { words.append("Control") }
-        if modifiers & UInt32(optionKey) != 0 { words.append("Option") }
-        if modifiers & UInt32(shiftKey) != 0 { words.append("Shift") }
-        if modifiers & UInt32(cmdKey) != 0 { words.append("Command") }
-        return (words + [keyName]).joined(separator: " ")
-    }
+    var spoken: String { (parts.map(\.2) + [keyName]).joined(separator: " ") }
 
     /// A shortcut from a key press, or nil when it has no ⌃, ⌥ or ⌘ (plain keys would get in
     /// the way of typing everywhere).
@@ -62,6 +53,7 @@ struct HotKeyShortcut: Codable, Equatable {
         case kVK_Return: return "Return"
         case kVK_Tab: return "Tab"
         case kVK_Delete: return "Delete"
+        case kVK_Escape: return "Escape"
         case kVK_LeftArrow: return "←"
         case kVK_RightArrow: return "→"
         case kVK_UpArrow: return "↑"
@@ -73,73 +65,172 @@ struct HotKeyShortcut: Codable, Equatable {
     }
 }
 
-/// Settings for the panel's shortcut, kept in UserDefaults.
-enum HotKeySettings {
-    static let shortcutKey = "menuBarHotKey"
-    static let enabledKey = "menuBarHotKeyEnabled"
+/// What a global shortcut does.
+enum HotKeyAction: String, CaseIterable, Identifiable {
+    case openPanel
+    case convertClipboard
+    case openWindow
+    case quickConvert
 
-    static var isEnabled: Bool { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
+    var id: String { rawValue }
 
-    static var shortcut: HotKeyShortcut {
-        get {
-            guard let data = UserDefaults.standard.data(forKey: shortcutKey),
-                  let shortcut = try? JSONDecoder().decode(HotKeyShortcut.self, from: data) else { return .standard }
-            return shortcut
+    var title: String {
+        switch self {
+        case .openPanel: "Open the menu bar panel"
+        case .convertClipboard: "Convert what's on the clipboard"
+        case .openWindow: "Open the Ameya window"
+        case .quickConvert: "Convert again to the last format"
         }
-        set { UserDefaults.standard.set(try? JSONEncoder().encode(newValue), forKey: shortcutKey) }
+    }
+
+    var help: String {
+        switch self {
+        case .openPanel: "Shows Ameya's panel under its menu bar icon, ready for files."
+        case .convertClipboard: "Adds the files or picture on the clipboard to Ameya, to pick a format."
+        case .openWindow: "Opens the big Ameya window."
+        case .quickConvert: "Converts the waiting files, or the clipboard's, to the format you used last."
+        }
+    }
+
+    /// Only the panel has a shortcut out of the box.
+    var standard: HotKeyShortcut? { self == .openPanel ? .standard : nil }
+}
+
+/// Shortcuts, kept in UserDefaults as JSON text ("none" when cleared on purpose).
+enum HotKeySettings {
+    static func key(_ action: HotKeyAction) -> String { "hotkey.\(action.rawValue)" }
+    static let none = "none"
+
+    static func shortcut(for action: HotKeyAction) -> HotKeyShortcut? {
+        guard let text = UserDefaults.standard.string(forKey: key(action)) else { return action.standard }
+        guard text != none, let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(HotKeyShortcut.self, from: data)
+    }
+
+    static func set(_ shortcut: HotKeyShortcut?, for action: HotKeyAction) {
+        let text = shortcut.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
+        UserDefaults.standard.set(text ?? none, forKey: key(action))
+    }
+
+    static func reset(_ action: HotKeyAction) {
+        UserDefaults.standard.removeObject(forKey: key(action))
     }
 }
 
-/// Owns the one registered hot key. Costs nothing until the key is pressed: the system delivers it.
+/// Owns the registered hot keys. Costs nothing until one is pressed: the system delivers it.
 @MainActor
 final class GlobalHotKey {
     static let shared = GlobalHotKey()
 
-    /// Called on the main actor when the shortcut is pressed.
-    var action: (() -> Void)?
-    private var hotKey: EventHotKeyRef?
+    /// Called on the main actor when an action's shortcut is pressed.
+    var handlers: [HotKeyAction: () -> Void] = [:]
+    private var registered: [HotKeyAction: EventHotKeyRef] = [:]
     private var handler: EventHandlerRef?
     private static let signature: OSType = 0x414D_5941 // "AMYA"
 
     private init() {}
 
-    /// Registers the shortcut from Settings (or nothing when it's turned off).
-    /// Returns a problem to show when another app already uses it.
-    @discardableResult
-    func applySettings() -> String? {
-        register(HotKeySettings.isEnabled ? HotKeySettings.shortcut : nil)
-    }
-
-    @discardableResult
-    func register(_ shortcut: HotKeyShortcut?) -> String? {
-        unregister()
-        guard let shortcut else { return nil }
-        installHandlerIfNeeded()
-        var reference: EventHotKeyRef?
-        let status = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers,
-                                         EventHotKeyID(signature: Self.signature, id: 1),
-                                         GetApplicationEventTarget(), 0, &reference)
-        guard status == noErr, let reference else {
-            hotKeyLog.error("Couldn't register \(shortcut.symbols, privacy: .public): \(status, privacy: .public)")
-            return "\(shortcut.symbols) is already used by macOS or another app. Try a different shortcut."
+    /// While Settings records a shortcut, every shortcut is let go, so pressing one that's
+    /// already in use reaches the recorder instead of running its action.
+    var handlersPaused = false {
+        didSet {
+            guard handlersPaused != oldValue else { return }
+            if handlersPaused {
+                registered.values.forEach { UnregisterEventHotKey($0) }
+                registered = [:]
+            } else {
+                applySettings()
+            }
         }
-        hotKey = reference
-        hotKeyLog.info("Shortcut \(shortcut.symbols, privacy: .public) registered")
-        return nil
     }
 
-    func unregister() {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
-        hotKey = nil
+    /// Registers every shortcut from Settings. Returns, per action, a problem to show when
+    /// macOS or another app already uses that shortcut.
+    @discardableResult
+    func applySettings() -> [HotKeyAction: String] {
+        guard !handlersPaused else { return [:] }
+        registered.values.forEach { UnregisterEventHotKey($0) }
+        registered = [:]
+        installHandlerIfNeeded()
+        var problems: [HotKeyAction: String] = [:]
+        for (index, action) in HotKeyAction.allCases.enumerated() {
+            guard let shortcut = HotKeySettings.shortcut(for: action) else { continue }
+            var reference: EventHotKeyRef?
+            let status = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers,
+                                             EventHotKeyID(signature: Self.signature, id: UInt32(index + 1)),
+                                             GetApplicationEventTarget(), 0, &reference)
+            if status == noErr, let reference {
+                registered[action] = reference
+            } else {
+                hotKeyLog.error("Couldn't register \(shortcut.symbols, privacy: .public): \(status, privacy: .public)")
+                problems[action] = "\(shortcut.symbols) is already taken by another app. Try a different shortcut."
+            }
+        }
+        hotKeyLog.info("Registered \(self.registered.count, privacy: .public) shortcut(s)")
+        return problems
+    }
+
+    fileprivate func fire(id: UInt32) {
+        let actions = HotKeyAction.allCases
+        guard id >= 1, Int(id) <= actions.count else { return }
+        handlers[actions[Int(id) - 1]]?()
     }
 
     private func installHandlerIfNeeded() {
         guard handler == nil else { return }
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, _, _ in
+        InstallEventHandler(GetApplicationEventTarget(), { _, event, _ in
+            var hotKey = EventHotKeyID()
+            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
+                              nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKey)
+            let id = hotKey.id
             // Carbon calls this on the main thread.
-            MainActor.assumeIsolated { GlobalHotKey.shared.action?() }
+            MainActor.assumeIsolated { GlobalHotKey.shared.fire(id: id) }
             return noErr
         }, 1, &spec, nil, &handler)
+    }
+}
+
+/// Shortcuts macOS uses out of the box, so the recorder can warn before they clash.
+/// (A sandboxed app can't read the user's own System Settings › Keyboard › Shortcuts.)
+enum SystemShortcuts {
+    private static let ctrl = UInt32(controlKey), opt = UInt32(optionKey), cmd = UInt32(cmdKey), shift = UInt32(shiftKey)
+
+    static let known: [(keyCode: Int, modifiers: UInt32, meaning: String)] = [
+        (kVK_Space, cmd, "Spotlight"),
+        (kVK_Space, cmd | opt, "Finder search window"),
+        (kVK_Space, ctrl, "Select the previous input source"),
+        (kVK_Space, ctrl | opt, "Select the next input source (when you have more than one keyboard language)"),
+        (kVK_Space, ctrl | cmd, "Emoji & Symbols"),
+        (kVK_Tab, cmd, "App Switcher"),
+        (kVK_ANSI_3, cmd | shift, "Screenshot"),
+        (kVK_ANSI_4, cmd | shift, "Screenshot of a selection"),
+        (kVK_ANSI_5, cmd | shift, "Screenshot and recording options"),
+        (kVK_ANSI_Q, ctrl | cmd, "Lock Screen"),
+        (kVK_ANSI_Q, cmd | shift, "Log Out"),
+        (kVK_Escape, cmd | opt, "Force Quit"),
+        (kVK_ANSI_D, cmd | opt, "Show or hide the Dock"),
+        (kVK_ANSI_F, ctrl | cmd, "Full Screen"),
+        (kVK_UpArrow, ctrl, "Mission Control"),
+        (kVK_DownArrow, ctrl, "Application windows"),
+        (kVK_LeftArrow, ctrl, "Move one space left"),
+        (kVK_RightArrow, ctrl, "Move one space right"),
+        (kVK_ANSI_H, cmd, "Hide the frontmost app"),
+        (kVK_ANSI_Q, cmd, "Quit the frontmost app"),
+        (kVK_ANSI_W, cmd, "Close the window"),
+        (kVK_ANSI_C, cmd, "Copy"),
+        (kVK_ANSI_V, cmd, "Paste"),
+        (kVK_ANSI_X, cmd, "Cut"),
+        (kVK_ANSI_Z, cmd, "Undo"),
+        (kVK_ANSI_A, cmd, "Select All"),
+        (kVK_ANSI_N, cmd, "New window or document in most apps"),
+        (kVK_ANSI_O, cmd, "Open in most apps"),
+        (kVK_ANSI_S, cmd, "Save in most apps"),
+        (kVK_ANSI_M, cmd, "Minimise the window"),
+    ]
+
+    /// What `shortcut` already does on a standard Mac, if anything.
+    static func meaning(of shortcut: HotKeyShortcut) -> String? {
+        known.first { $0.keyCode == Int(shortcut.keyCode) && $0.modifiers == shortcut.modifiers }?.meaning
     }
 }

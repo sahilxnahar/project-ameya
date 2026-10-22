@@ -25,11 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSHostingController(rootView: AnyView(MainView().environmentObject(store).environmentObject(results)))
     }
     private lazy var settingsWindow = HostedWindow(
-        identifier: "settings", title: "Ameya Settings", autosaveName: "AmeyaSettingsWindow", minSize: NSSize(width: 480, height: 300)
+        identifier: "settings", title: "Ameya Settings", autosaveName: "AmeyaSettingsWindow", minSize: NSSize(width: 560, height: 420)
     ) {
-        // Settings has grown taller than small screens; it scrolls instead.
-        NSHostingController(rootView: ScrollView { SettingsView() }
-            .frame(width: 480).frame(minHeight: 320, idealHeight: 640, maxHeight: .infinity))
+        // General, Keyboard & Mouse, Menu (Settings/).
+        NSHostingController(rootView: SettingsRoot())
     }
 
     /// Reopens the window after it was closed. Kept for callers like the drag wheel.
@@ -59,7 +58,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSUpdateDynamicServices()
         autoConverter.applySettings()
         ClipboardActions.removeOldFiles()
-        GlobalHotKey.shared.action = { [weak self] in self?.statusItem?.togglePanel() }
+        GlobalHotKey.shared.handlers = [
+            .openPanel: { [weak self] in self?.statusItem?.togglePanel() },
+            .convertClipboard: { [weak self] in self?.statusItem?.addClipboardAndShowPanel() },
+            .openWindow: { [weak self] in self?.showMainWindow() },
+            .quickConvert: { [weak self] in self?.statusItem?.quickConvert() },
+        ]
         GlobalHotKey.shared.applySettings()
         WheelController.shared.start() // The global drag wheel (Wheel/).
         if let ring = WheelController.previewRing(from: CommandLine.arguments) { WheelController.shared.showPreview(ring) }

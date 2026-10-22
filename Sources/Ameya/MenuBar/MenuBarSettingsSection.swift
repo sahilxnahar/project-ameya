@@ -1,86 +1,106 @@
 import AppKit
 import SwiftUI
 
-/// Settings → "Menu bar": the Dock icon, the panel's keyboard shortcut and the quick HEIC button.
-struct MenuBarSettingsSection: View {
+/// Settings → Menu: the menu bar icon and its panel.
+struct MenuSettings: View {
     @AppStorage(DockIcon.key) private var showInDock = false
-    @AppStorage(HotKeySettings.enabledKey) private var shortcutOn = true
+    @AppStorage(PanelPreferences.iconStyleKey) private var iconStyle = StatusIcon.Style.progress.rawValue
+    @AppStorage(PanelPreferences.clickKey) private var click = ClickBehaviour.leftOpensPanel.rawValue
+    @AppStorage(PanelPreferences.dropActionKey) private var dropAction = "ask"
+    @AppStorage(PanelPreferences.densityKey) private var density = PanelDensity.comfortable.rawValue
+    @AppStorage(PanelPreferences.largerTextKey) private var largerText = false
     @AppStorage(QuickConvert.key) private var quickConvert = true
-    @State private var shortcut = HotKeySettings.shortcut
-    @State private var recording = false
-    @State private var monitor: Any?
-    @State private var problem: String?
+    @State private var favourites = PanelPreferences.favourites
 
     var body: some View {
-        Section("Menu bar") {
-            Toggle("Show Ameya in the Dock", isOn: $showInDock)
-                .accessibilityHint("Ameya always has its icon in the menu bar. This adds one to the Dock too.")
-                .accessibilityIdentifier("settings-dock")
-                .onChange(of: showInDock) { _, _ in DockIcon.apply() }
-
-            Toggle("Open the panel from any app with a shortcut", isOn: $shortcutOn)
-                .accessibilityIdentifier("settings-shortcut-on")
-                .onChange(of: shortcutOn) { _, _ in problem = GlobalHotKey.shared.applySettings() }
-            LabeledContent("Shortcut") {
-                HStack(spacing: 8) {
-                    Text(recording ? "Press keys…" : shortcut.symbols)
-                        .font(.body.monospaced())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 6).strokeBorder(recording ? Theme.accent : Color.secondary.opacity(0.4)))
-                        .accessibilityHidden(true)
-                    Button(recording ? "Cancel" : "Change…") { recording ? stopRecording() : startRecording() }
-                        .accessibilityLabel(recording ? "Cancel recording" : "Change shortcut, currently \(shortcut.spoken)")
-                        .accessibilityHint(recording ? "" : "Then press the new keys, with Control, Option or Command.")
-                        .accessibilityIdentifier("settings-shortcut-change")
-                    if shortcut != .standard {
-                        Button("Reset") { save(.standard) }
-                            .accessibilityHint("Goes back to Control Option Space.")
+        Form {
+            Section("Menu bar icon") {
+                Picker("Icon", selection: $iconStyle) {
+                    ForEach(StatusIcon.Style.allCases) { style in
+                        Label {
+                            Text(style.title)
+                        } icon: {
+                            Image(nsImage: StatusIcon.image(style == .progress ? .working(0.6) : .idle, style: style))
+                        }
+                        .tag(style.rawValue)
                     }
                 }
-            }
-            .disabled(!shortcutOn)
-            if let problem {
-                Text(problem).font(.caption).foregroundStyle(.secondary)
+                .pickerStyle(.radioGroup)
+                .accessibilityHint("The progress icon traces the outline as files convert.")
+                Picker("Clicking the icon", selection: $click) {
+                    ForEach(ClickBehaviour.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                .pickerStyle(.radioGroup)
+                Picker("When files are dropped on the icon", selection: $dropAction) {
+                    Text("Ask: show them in the panel").tag("ask")
+                    Divider()
+                    ForEach(SettingsCatalog.panelItems) { item in
+                        Text(item.id.hasPrefix("tool.") ? item.title : "Convert to \(item.title)").tag(item.id)
+                    }
+                }
+                .accessibilityHint("Choose a format or tool to start at once when you drop files on the menu bar icon.")
+                Toggle("Show Ameya in the Dock", isOn: $showInDock)
+                    .accessibilityHint("Ameya always has its icon in the menu bar. This adds one to the Dock too.")
+                    .onChange(of: showInDock) { _, _ in DockIcon.apply() }
             }
 
-            Toggle("Offer one-click “Convert to JPEG” for iPhone photos", isOn: $quickConvert)
-                .accessibilityHint("When every file you drop on the menu bar is a HEIC photo, a JPEG button comes first.")
-                .accessibilityIdentifier("settings-quick-heic")
+            Section("Favourites") {
+                OrderedItemsEditor(noun: "favourite", all: SettingsCatalog.panelItems, chosen: $favourites,
+                                   emptyText: "Pin the formats and tools you use most. They come first in the panel when they suit your files.")
+                    .onChange(of: favourites) { _, new in PanelPreferences.favourites = new }
+            }
+
+            Section("Panel") {
+                ForEach(PanelSection.allCases) { section in
+                    SectionToggle(section: section)
+                }
+                Picker("Spacing", selection: $density) {
+                    ForEach(PanelDensity.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                Toggle("Larger text in the panel", isOn: $largerText)
+                    .accessibilityHint("Makes the panel bigger, with larger text and buttons.")
+                Toggle("Offer one-click “Convert to JPEG” for iPhone photos", isOn: $quickConvert)
+                    .accessibilityHint("When every file waiting is a HEIC photo, a JPEG button comes first.")
+            }
         }
-        .onDisappear(perform: stopRecording)
+        .formStyle(.grouped)
+    }
+}
+
+private struct SectionToggle: View {
+    let section: PanelSection
+    @AppStorage private var shown: Bool
+
+    init(section: PanelSection) {
+        self.section = section
+        _shown = AppStorage(wrappedValue: true, PanelPreferences.sectionKey(section))
     }
 
-    private func startRecording() {
-        problem = nil
-        recording = true
-        Feedback.announce("Press the new shortcut, with Control, Option or Command. Escape cancels.")
-        // Only while recording, and only for keys pressed in Settings.
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53 { // Escape
-                stopRecording()
-                return nil
+    var body: some View {
+        Toggle("Show “\(section.title)”", isOn: $shown)
+    }
+}
+
+/// Settings → Keyboard & Mouse: the drag wheel and global shortcuts.
+struct KeyboardMouseSettings: View {
+    @StateObject private var shortcuts = ShortcutsModel()
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(HotKeyAction.allCases) { action in
+                    ShortcutRecorder(action: action, model: shortcuts)
+                }
+            } header: {
+                Text("Shortcuts that work in any app")
+            } footer: {
+                Text("Click a shortcut, then press the keys you want, with Control, Option or Command. Escape cancels; Delete clears.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            guard let new = HotKeyShortcut(event: event) else {
-                problem = "Include Control, Option or Command, so the shortcut doesn't get in the way of typing."
-                return nil
-            }
-            save(new)
-            stopRecording()
-            return nil
+            WheelSettingsSection()
         }
-    }
-
-    private func stopRecording() {
-        if let monitor { NSEvent.removeMonitor(monitor) }
-        monitor = nil
-        recording = false
-    }
-
-    private func save(_ new: HotKeyShortcut) {
-        HotKeySettings.shortcut = new
-        shortcut = new
-        problem = GlobalHotKey.shared.applySettings()
-        if problem == nil { Feedback.announce("Shortcut set to \(new.spoken).") }
+        .formStyle(.grouped)
     }
 }

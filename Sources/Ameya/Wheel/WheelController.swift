@@ -30,6 +30,7 @@ final class WheelController {
     private var defaultsObserver: NSObjectProtocol?
     private var pollTimer: Timer?
     private var finishWork: DispatchWorkItem?
+    private var showWork: DispatchWorkItem?
 
     private var dragChangeCount = 0
     private var armed = false
@@ -150,6 +151,7 @@ final class WheelController {
         if flags.contains(.command) { held.insert(.command) }
         if flags.contains(.control) { held.insert(.control) }
         if flags.contains(.option) { held.insert(.option) }
+        if flags.contains(.function) { held.insert(.function) }
         return held
     }
 
@@ -159,7 +161,7 @@ final class WheelController {
         for effect in effects {
             switch effect {
             case let .show(ring):
-                present(ring, at: NSEvent.mouseLocation)
+                presentAfterDelay(ring)
             case let .switchRing(ring):
                 fill(ring)
                 announce(ring.announcement(choices: model.choices.count))
@@ -172,12 +174,32 @@ final class WheelController {
             case .perform:
                 break // The files arrive with the drop; `drop(_:urls:)` carries out the choice.
             case .hide:
+                showWork?.cancel()
                 finishWork?.cancel()
                 panel.dismiss()
                 model.hovered = nil
             }
         }
         if !machine.isTracking { stopPolling() }
+    }
+
+    /// Settings → "Delay before showing": the keys must stay held this long. No timer runs
+    /// unless a wheel is about to appear.
+    private func presentAfterDelay(_ ring: WheelRing) {
+        showWork?.cancel()
+        let delay = machine.settings.showDelay
+        guard delay > 0 else {
+            present(ring, at: NSEvent.mouseLocation)
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, case let .showing(current, _) = self.machine.state else { return }
+                self.present(current, at: NSEvent.mouseLocation)
+            }
+        }
+        showWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
     private func present(_ ring: WheelRing, at point: NSPoint) {
@@ -192,7 +214,7 @@ final class WheelController {
         guard let store = AppDelegate.shared?.store else { return }
         model.ring = ring
         model.fileCount = dragFormats.count
-        model.choices = WheelChoices.make(ring, formats: dragFormats, store: store)
+        model.choices = WheelChoices.make(ring, formats: dragFormats, store: store, chosen: machine.settings.items[ring])
         model.hovered = nil
     }
 

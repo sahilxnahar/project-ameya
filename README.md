@@ -1,11 +1,28 @@
 # Project Ameya
 
+<img src="docs/screenshots/app-icon.png" alt="Ameya's app icon: the gold Ameya mark on a dark rounded square" width="128">
+
 A native macOS file converter and toolbox. Drop files on it, pick what you want, get a new file.
 Everything happens on your Mac: no account, no uploads, no limits.
 
 > **Status: early development.** Plenty already works (see below), but expect rough edges.
 
 > **Taking over this project?** Start with [docs/HANDOFF.md](docs/HANDOFF.md): decisions, architecture, open branches and what's left.
+
+## Lives in your menu bar
+
+Ameya sits in the menu bar (no Dock icon unless you want one). Drop files on its icon, click it,
+or press ⌃⌥Space from any app to open a compact panel with the same choices as the big window.
+While files convert, the icon traces its outline; when they're done, it shows how many are ready.
+
+<img src="docs/screenshots/menubar-panel.png" alt="The menu bar panel with three files ready and Convert to choices" width="380">
+<img src="docs/screenshots/menubar-icon.png" alt="The menu bar icon idle, working, done and as a drop target" width="420">
+
+Almost everything is yours to set, by keyboard and VoiceOver too (Settings › Keyboard & Mouse and
+Settings › Menu): any shortcut for the panel, the clipboard, the big window and "convert again";
+which keys (⇧ ⌃ ⌥ ⌘ fn, alone or together) open each drag wheel and what each wheel shows;
+favourites, sections, spacing and larger text in the panel; what a click, a right-click and a drop
+on the icon do. Settings can be exported to a file, imported and reset.
 
 ## What it converts
 
